@@ -4,10 +4,10 @@
 extern crate log;
 extern crate hyper;
 
-use hyper::service::{Service, NewService};
-use hyper::{Body, Error, Response, StatusCode, Request, Server};
-use futures::{future, Future};
 use futures::stream::Stream;
+use futures::{future, Future};
+use hyper::service::{NewService, Service};
+use hyper::{Body, Error, Request, Response, Server, StatusCode};
 
 use std::collections::HashMap;
 
@@ -33,7 +33,8 @@ pub struct Delivery<'a> {
 
 #[derive(Clone)]
 pub struct Hook<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
     event: &'static str,
     secret: Option<&'static str>,
@@ -42,23 +43,26 @@ pub struct Hook<F>
 
 #[derive(Clone)]
 pub struct Constructor<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
-    hooks: HookRegistry<F>
+    hooks: HookRegistry<F>,
 }
 
 pub struct Handler<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
-    hooks: HookRegistry<F>
+    hooks: HookRegistry<F>,
 }
 
 impl<F> Constructor<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
     pub fn new() -> Constructor<F> {
-        Constructor{
-            hooks: HashMap::new()
+        Constructor {
+            hooks: HashMap::new(),
         }
     }
 
@@ -68,13 +72,14 @@ impl<F> Constructor<F>
 }
 
 impl<F> Hook<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
     pub fn new(event: &'static str, secret: Option<&'static str>, func: F) -> Self {
         Self {
             event,
             secret,
-            func: Box::new(func)
+            func: Box::new(func),
         }
     }
 
@@ -99,9 +104,10 @@ impl<F> Hook<F>
 }
 
 impl<F> Handler<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
-    fn run_hooks (&self, delivery: &Delivery) {
+    fn run_hooks(&self, delivery: &Delivery) {
         debug!("Handling '{}' event", delivery.event);
         let mut matched: Vec<Hook<F>> = Vec::new();
         hooks_find_match!(matched, self.hooks, delivery.event, "*");
@@ -117,13 +123,14 @@ impl<F> Handler<F>
 
     fn from(constructor: &Constructor<F>) -> Self {
         Self {
-            hooks: constructor.hooks.clone()
+            hooks: constructor.hooks.clone(),
         }
     }
 }
 
 impl<F> Service for Handler<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
     type ReqBody = Body;
     type ResBody = Body;
@@ -136,15 +143,21 @@ impl<F> Service for Handler<F>
             id: "test ID",
             event: "push",
             unparsed_payload: "{event: \"push\"}",
-            signature: None
+            signature: None,
         };
         self.run_hooks(&delivery);
-        Box::new(future::ok(Response::builder().status(StatusCode::OK).body("Bla!".into()).unwrap()))
+        Box::new(future::ok(
+            Response::builder()
+                .status(StatusCode::OK)
+                .body("Bla!".into())
+                .unwrap(),
+        ))
     }
 }
 
 impl<F> NewService for Constructor<F>
-    where F: Fn(&Delivery) + Clone + Send + 'static
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
 {
     type ReqBody = Body;
     type ResBody = Body;

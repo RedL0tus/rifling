@@ -2,14 +2,14 @@
 
 #[macro_use]
 extern crate log;
-extern crate rifling;
 extern crate hyper;
 extern crate pretty_env_logger;
+extern crate rifling;
 
-use hyper::Server;
 use futures::Future;
+use hyper::Server;
 
-use rifling::{Constructor, Hook, Delivery};
+use rifling::{Constructor, Delivery, Hook};
 
 use std::env;
 
@@ -20,11 +20,12 @@ fn main() {
     info!("Bazinga!");
     pretty_env_logger::init_custom_env("RIFLING_LOG");
     let mut cons = Constructor::new();
-    //let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    let hook = Hook::new("*", None, |_: &Delivery| {info!("Bazinga!")});
+    let hook = Hook::new("*", None, |_: &Delivery| info!("Bazinga!"));
     cons.register(hook);
     let addr = "0.0.0.0:4567".parse().unwrap();
-    let server = Server::bind(&addr).serve(cons).map_err(|e| error!("Error: {:?}", e));
+    let server = Server::bind(&addr)
+        .serve(cons)
+        .map_err(|e| error!("Error: {:?}", e));
     info!("Service started");
     hyper::rt::run(server);
 }
