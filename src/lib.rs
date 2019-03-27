@@ -2,10 +2,12 @@
 
 #[macro_use]
 extern crate log;
-extern crate actix_web;
+extern crate hyper;
 
-use actix_web::{http, server, App, Request, HttpResponse, Responder, Result};
-use actix_web::server::{IntoHttpHandler, HttpHandler, HttpHandlerTask};
+use hyper::service::{Service, NewService};
+use hyper::{Body, Error, Response, StatusCode, Request, Server};
+use futures::{future, Future};
+use futures::stream::Stream;
 
 use std::collections::HashMap;
 
@@ -31,7 +33,7 @@ pub struct Delivery<'a> {
 
 #[derive(Clone)]
 pub struct Hook<F>
-    where F: Fn(&Delivery) + Clone + 'static
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
     event: &'static str,
     secret: Option<&'static str>,
@@ -40,30 +42,42 @@ pub struct Hook<F>
 
 #[derive(Clone)]
 pub struct Constructor<F>
-    where F: Fn(&Delivery) + Clone + 'static
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
     hooks: HookRegistry<F>
 }
 
 pub struct Handler<F>
-    where F: Fn(&Delivery) + Clone + 'static
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
     hooks: HookRegistry<F>
 }
 
 impl<F> Constructor<F>
-    where F: Fn(&Delivery) + Clone + 'static
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
     pub fn new() -> Constructor<F> {
         Constructor{
             hooks: HashMap::new()
         }
     }
+
+    pub fn register(&mut self, hook: Hook<F>) {
+        self.hooks.insert(hook.event.to_string(), hook.clone());
+    }
 }
 
 impl<F> Hook<F>
-    where F: Fn(&Delivery) + Clone + 'static
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
+    pub fn new(event: &'static str, secret: Option<&'static str>, func: F) -> Self {
+        Self {
+            event,
+            secret,
+            func: Box::new(func)
+        }
+    }
+
     fn auth(&self, delivery: &Delivery) -> bool {
         if let Some(secret) = self.secret {
             true // Unimplemented
@@ -85,7 +99,7 @@ impl<F> Hook<F>
 }
 
 impl<F> Handler<F>
-    where F: Fn(&Delivery) + Clone + 'static
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
     fn run_hooks (&self, delivery: &Delivery) {
         debug!("Handling '{}' event", delivery.event);
@@ -101,30 +115,46 @@ impl<F> Handler<F>
         }
     }
 
-    fn from(constructor: Constructor<F>) -> Self {
+    fn from(constructor: &Constructor<F>) -> Self {
         Self {
-            hooks: constructor.hooks
+            hooks: constructor.hooks.clone()
         }
     }
 }
 
-impl<F> IntoHttpHandler for Constructor<F>
-    where F: Fn(&Delivery) + Clone + 'static
+impl<F> Service for Handler<F>
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
-    type Handler = Handler<F>;
+    type ReqBody = Body;
+    type ResBody = Body;
+    type Error = Error;
+    type Future = Box<Future<Item = Response<Body>, Error = Error> + Send>;
 
-    fn into_handler(self) -> Self::Handler {
-        Handler::from(self)
+    fn call(&mut self, req: Request<Self::ReqBody>) -> Self::Future {
+        info!("Executed!");
+        let delivery = Delivery {
+            id: "test ID",
+            event: "push",
+            unparsed_payload: "{event: \"push\"}",
+            signature: None
+        };
+        self.run_hooks(&delivery);
+        Box::new(future::ok(Response::builder().status(StatusCode::OK).body("Bla!".into()).unwrap()))
     }
 }
 
-impl<F> HttpHandler for Handler<F>
-    where F: Fn(&Delivery) + Clone + 'static
+impl<F> NewService for Constructor<F>
+    where F: Fn(&Delivery) + Clone + Send + 'static
 {
-    type Task = Box<HttpHandlerTask>;
+    type ReqBody = Body;
+    type ResBody = Body;
+    type Error = Error;
+    type Service = Handler<F>;
+    type Future = Box<Future<Item = Self::Service, Error = Self::InitError> + Send>;
+    type InitError = Error;
 
-    fn handle(&self, req: Request) -> Result<Self::Task, Request> {
-        unimplemented!()
+    fn new_service(&self) -> Self::Future {
+        Box::new(future::ok(Handler::from(self)))
     }
 }
 
