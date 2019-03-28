@@ -6,6 +6,7 @@ extern crate hyper;
 
 use futures::stream::Stream;
 use futures::{future, Future};
+use hyper::header::{HeaderMap, HeaderValue};
 use hyper::service::{NewService, Service};
 use hyper::{Body, Error, Request, Response, Server, StatusCode};
 
@@ -27,14 +28,14 @@ macro_rules! hooks_find_match {
 pub struct Delivery<'a> {
     pub id: &'a str,
     pub event: &'a str,
-    pub unparsed_payload: &'a str,
+    pub unparsed_payload: String,
     pub signature: Option<&'a str>,
 }
 
 #[derive(Clone)]
 pub struct Hook<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     event: &'static str,
     secret: Option<&'static str>,
@@ -44,21 +45,39 @@ where
 #[derive(Clone)]
 pub struct Constructor<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     hooks: HookRegistry<F>,
 }
 
 pub struct Handler<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     hooks: HookRegistry<F>,
 }
 
+pub struct Executor<F>
+where
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
+{
+    matched_hooks: Vec<Hook<F>>,
+}
+
+impl<'a> From<(HeaderMap<HeaderValue>, String)> for Delivery<'a> {
+    fn from((headers, body): (HeaderMap<HeaderValue>, String)) -> Self {
+        Self {
+            id: "Unimplemented",
+            event: "Unimplemented",
+            unparsed_payload: body.clone(),
+            signature: None,
+        }
+    }
+}
+
 impl<F> Constructor<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     pub fn new() -> Constructor<F> {
         Constructor {
@@ -73,7 +92,7 @@ where
 
 impl<F> Hook<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     pub fn new(event: &'static str, secret: Option<&'static str>, func: F) -> Self {
         Self {
@@ -103,55 +122,64 @@ where
     }
 }
 
+impl<F> Executor<F>
+where
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
+{
+    fn run(self, delivery: Delivery) {
+        for hook in self.matched_hooks {
+            hook.handle_delivery(&delivery);
+        }
+    }
+}
+
 impl<F> Handler<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
-    fn run_hooks(&self, delivery: &Delivery) {
-        debug!("Handling '{}' event", delivery.event);
+    fn get_hooks(&self, event: &str) -> Executor<F> {
+        debug!("Handling '{}' event", event);
         let mut matched: Vec<Hook<F>> = Vec::new();
-        hooks_find_match!(matched, self.hooks, delivery.event, "*");
-        if matched.len() > 0 {
-            for hook in matched {
-                hook.handle_delivery(delivery);
-            }
-            info!("All matched hooks have been executed");
-        } else {
-            info!("No matched hook found, ignoring...");
+        hooks_find_match!(matched, self.hooks, event, "*");
+        Executor {
+            matched_hooks: matched,
         }
     }
 }
 
 impl<F> Service for Handler<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = Error;
-    type Future = Box<Future<Item = Response<Body>, Error = Error> + Send>;
+    type Future = Box<Future<Item = Response<Body>, Error = Error> + Send + 'static>;
 
     fn call(&mut self, req: Request<Self::ReqBody>) -> Self::Future {
-        info!("Executed!");
-        let delivery = Delivery {
-            id: "test ID",
-            event: "push",
-            unparsed_payload: "{event: \"push\"}",
-            signature: None,
-        };
-        self.run_hooks(&delivery);
-        Box::new(future::ok(
-            Response::builder()
-                .status(StatusCode::OK)
-                .body("Bla!".into())
-                .unwrap(),
-        ))
+        let headers = req.headers().clone();
+        let event = "push"; // Unimplemented, it can be acquired from the headers
+        let executor = self.get_hooks(event);
+        Box::new(
+            req.into_body()
+                .concat2()
+                .map(|chunk| String::from_utf8(chunk.to_vec()).unwrap())
+                .and_then(move |body| {
+                    executor.run(Delivery::from((headers, body)));
+                    future::ok(
+                        Response::builder()
+                            .status(StatusCode::OK)
+                            .body("Async bla!".into())
+                            .unwrap(),
+                    )
+                }),
+        )
     }
 }
 
 impl<F> From<&Constructor<F>> for Handler<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     fn from(constructor: &Constructor<F>) -> Self {
         Self {
@@ -162,7 +190,7 @@ where
 
 impl<F> NewService for Constructor<F>
 where
-    F: Fn(&Delivery) + Clone + Send + 'static,
+    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
     type ReqBody = Body;
     type ResBody = Body;

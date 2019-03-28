@@ -22,6 +22,7 @@ fn main() {
     let mut cons = Constructor::new();
     let hook = Hook::new("*", None, |_: &Delivery| info!("Bazinga!"));
     cons.register(hook);
+    cons.register(another_hook);
     let addr = "0.0.0.0:4567".parse().unwrap();
     let server = Server::bind(&addr)
         .serve(cons)
