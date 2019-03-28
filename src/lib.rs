@@ -120,12 +120,6 @@ where
             info!("No matched hook found, ignoring...");
         }
     }
-
-    fn from(constructor: &Constructor<F>) -> Self {
-        Self {
-            hooks: constructor.hooks.clone(),
-        }
-    }
 }
 
 impl<F> Service for Handler<F>
@@ -152,6 +146,17 @@ where
                 .body("Bla!".into())
                 .unwrap(),
         ))
+    }
+}
+
+impl<F> From<&Constructor<F>> for Handler<F>
+where
+    F: Fn(&Delivery) + Clone + Send + 'static,
+{
+    fn from(constructor: &Constructor<F>) -> Self {
+        Self {
+            hooks: constructor.hooks.clone(),
+        }
     }
 }
 
