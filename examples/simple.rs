@@ -21,6 +21,7 @@ fn main() {
     pretty_env_logger::init_custom_env("RIFLING_LOG");
     let mut cons = Constructor::new();
     let hook = Hook::new("*", None, |_: &Delivery| info!("Bazinga!"));
+    let another_hook = Hook::new("push", None, |_: &Delivery| info!("Pushed!"));
     cons.register(hook);
     cons.register(another_hook);
     let addr = "0.0.0.0:4567".parse().unwrap();

@@ -12,7 +12,7 @@ use hyper::{Body, Error, Request, Response, Server, StatusCode};
 
 use std::collections::HashMap;
 
-type HookRegistry<F> = HashMap<String, Hook<F>>;
+type HookRegistry = HashMap<String, Hook>;
 
 macro_rules! hooks_find_match {
     ($results:expr, $source:expr, $($pattern:expr), *) => {
@@ -24,6 +24,15 @@ macro_rules! hooks_find_match {
     }
 }
 
+pub trait HookFunc: HookFuncClone + Sync + Send {
+    fn run(&self, delivery: &Delivery);
+}
+
+// Inspired by https://stackoverflow.com/a/30353928
+pub trait HookFuncClone {
+    fn clone_box(&self) -> Box<HookFunc>;
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct Delivery<'a> {
     pub id: &'a str,
@@ -33,35 +42,47 @@ pub struct Delivery<'a> {
 }
 
 #[derive(Clone)]
-pub struct Hook<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
+pub struct Hook {
     event: &'static str,
     secret: Option<&'static str>,
-    func: Box<F>,
+    func: Box<HookFunc>,
 }
 
 #[derive(Clone)]
-pub struct Constructor<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
-    hooks: HookRegistry<F>,
+pub struct Constructor {
+    hooks: HookRegistry,
 }
 
-pub struct Handler<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
-    hooks: HookRegistry<F>,
+pub struct Handler {
+    hooks: HookRegistry,
 }
 
-pub struct Executor<F>
+pub struct Executor {
+    matched_hooks: Vec<Hook>,
+}
+
+impl<F> HookFunc for F
 where
     F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
-    matched_hooks: Vec<Hook<F>>,
+    fn run(&self, delivery: &Delivery) {
+        self(delivery)
+    }
+}
+
+impl<T> HookFuncClone for T
+where
+    T: HookFunc + Clone + 'static,
+{
+    fn clone_box(&self) -> Box<HookFunc> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<HookFunc> {
+    fn clone(&self) -> Box<HookFunc> {
+        self.clone_box()
+    }
 }
 
 impl<'a> From<(HeaderMap<HeaderValue>, String)> for Delivery<'a> {
@@ -75,26 +96,24 @@ impl<'a> From<(HeaderMap<HeaderValue>, String)> for Delivery<'a> {
     }
 }
 
-impl<F> Constructor<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
-    pub fn new() -> Constructor<F> {
+impl Constructor {
+    pub fn new() -> Constructor {
         Constructor {
             hooks: HashMap::new(),
         }
     }
 
-    pub fn register(&mut self, hook: Hook<F>) {
+    pub fn register(&mut self, hook: Hook) {
         self.hooks.insert(hook.event.to_string(), hook.clone());
     }
 }
 
-impl<F> Hook<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
-    pub fn new(event: &'static str, secret: Option<&'static str>, func: F) -> Self {
+impl Hook {
+    pub fn new(
+        event: &'static str,
+        secret: Option<&'static str>,
+        func: impl HookFunc + 'static,
+    ) -> Self {
         Self {
             event,
             secret,
@@ -110,22 +129,14 @@ where
         }
     }
 
-    fn run(self, delivery: &Delivery) {
-        let func = self.func;
-        func(delivery);
-    }
-
     fn handle_delivery(self, delivery: &Delivery) {
         if self.auth(delivery) {
-            self.run(delivery)
+            self.func.run(delivery)
         }
     }
 }
 
-impl<F> Executor<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
+impl Executor {
     fn run(self, delivery: Delivery) {
         for hook in self.matched_hooks {
             hook.handle_delivery(&delivery);
@@ -133,13 +144,10 @@ where
     }
 }
 
-impl<F> Handler<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
-    fn get_hooks(&self, event: &str) -> Executor<F> {
+impl Handler {
+    fn get_hooks(&self, event: &str) -> Executor {
         debug!("Handling '{}' event", event);
-        let mut matched: Vec<Hook<F>> = Vec::new();
+        let mut matched: Vec<Hook> = Vec::new();
         hooks_find_match!(matched, self.hooks, event, "*");
         Executor {
             matched_hooks: matched,
@@ -147,10 +155,7 @@ where
     }
 }
 
-impl<F> Service for Handler<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
+impl Service for Handler {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = Error;
@@ -177,25 +182,19 @@ where
     }
 }
 
-impl<F> From<&Constructor<F>> for Handler<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
-    fn from(constructor: &Constructor<F>) -> Self {
+impl From<&Constructor> for Handler {
+    fn from(constructor: &Constructor) -> Self {
         Self {
             hooks: constructor.hooks.clone(),
         }
     }
 }
 
-impl<F> NewService for Constructor<F>
-where
-    F: Fn(&Delivery) + Clone + Sync + Send + 'static,
-{
+impl NewService for Constructor {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = Error;
-    type Service = Handler<F>;
+    type Service = Handler;
     type Future = Box<Future<Item = Self::Service, Error = Self::InitError> + Send>;
     type InitError = Error;
 
