@@ -5,7 +5,9 @@ authors = ["Kay Lin <kaymw@aosc.io>"]
 edition = "2018"
 
 [dependencies]
+hex = "0.3"
 log = "0.4"
+ring = "0.14"
 hyper = "0.12"
 futures = "0.1"
 

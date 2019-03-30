@@ -1,9 +1,14 @@
 //! Rifling the GitHub webhook listener library
 
+extern crate hex;
 #[macro_use]
 extern crate log;
+extern crate ring;
 extern crate hyper;
 
+use hex::FromHex;
+use ring::hmac;
+use ring::digest;
 use futures::stream::Stream;
 use futures::{future, Future};
 use hyper::header::{HeaderMap, HeaderValue};
@@ -139,12 +144,19 @@ impl Hook {
         }
     }
 
-    fn auth(&self, delivery: &Delivery) -> bool {
+    pub fn auth(&self, delivery: &Delivery) -> bool {
         if let Some(secret) = self.secret {
-            true // Unimplemented
-        } else {
-            true
+            if let Some(signature) = &delivery.signature {
+                let prefix = signature[5..signature.len()].as_bytes();
+                if let Ok(sigbytes) =  Vec::from_hex(prefix) {
+                    let sbytes = secret.as_bytes();
+                    let pbytes = delivery.unparsed_payload.as_bytes();
+                    let key = hmac::SigningKey::new(&digest::SHA1, &sbytes);
+                    return hmac::verify_with_own_key(&key, &pbytes, &sigbytes).is_ok();
+                }
+            }
         }
+        false
     }
 
     fn handle_delivery(self, delivery: &Delivery) {
@@ -223,8 +235,33 @@ impl NewService for Constructor {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use hex::ToHex;
+    use ring::hmac;
+    use ring::digest;
+
     #[test]
     fn it_works() {
         assert_eq!(2 + 2, 4);
+    }
+
+    #[test]
+    fn payload_authentication() {
+        let secret = "secret";
+        let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
+        let payload = r#"{"zen": "Bazinga!"}"#;
+        let sbytes = secret.as_bytes();
+        let pbytes = payload.as_bytes();
+        let key = hmac::SigningKey::new(&digest::SHA1, &sbytes);
+        let mut signature = String::new();
+        hmac::sign(&key, &pbytes).as_ref().write_hex(&mut signature).unwrap();
+        let signature_field = String::from(format!("sha1={}", signature));
+        let delivery = Delivery {
+            id: None,
+            event: Some(String::from("push")),
+            unparsed_payload: String::from(payload),
+            signature: Some(signature_field)
+        };
+        assert!(hook.auth(&delivery));
     }
 }
