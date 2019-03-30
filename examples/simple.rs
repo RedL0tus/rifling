@@ -15,13 +15,13 @@ use std::env;
 
 fn main() {
     if let Err(_) = env::var("RIFLING_LOG") {
-        env::set_var("RIFLING_LOG", "info")
+        env::set_var("RIFLING_LOG", "debug")
     }
     info!("Bazinga!");
     pretty_env_logger::init_custom_env("RIFLING_LOG");
     let mut cons = Constructor::new();
-    let hook = Hook::new("*", None, |_: &Delivery| info!("Bazinga!"));
-    let another_hook = Hook::new("push", None, |_: &Delivery| info!("Pushed!"));
+    let hook = Hook::new("*", Some("secret"), |_: &Delivery| info!("Bazinga!"));
+    let another_hook = Hook::new("push", Some("secret"), |_: &Delivery| info!("Pushed!"));
     cons.register(hook);
     cons.register(another_hook);
     let addr = "0.0.0.0:4567".parse().unwrap();
