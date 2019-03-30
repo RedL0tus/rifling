@@ -24,6 +24,20 @@ macro_rules! hooks_find_match {
     }
 }
 
+macro_rules! get_header_value {
+    ($headers:expr, $key:expr) => {
+        if let Some(value) = $headers.get($key) {
+            if let Ok(str) = value.to_str() {
+                Some(String::from(str.clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+}
+
 pub trait HookFunc: HookFuncClone + Sync + Send {
     fn run(&self, delivery: &Delivery);
 }
@@ -34,11 +48,11 @@ pub trait HookFuncClone {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct Delivery<'a> {
-    pub id: &'a str,
-    pub event: &'a str,
+pub struct Delivery {
+    pub id: Option<String>,
+    pub event: Option<String>,
     pub unparsed_payload: String,
-    pub signature: Option<&'a str>,
+    pub signature: Option<String>,
 }
 
 #[derive(Clone)]
@@ -85,13 +99,17 @@ impl Clone for Box<HookFunc> {
     }
 }
 
-impl<'a> From<(HeaderMap<HeaderValue>, String)> for Delivery<'a> {
-    fn from((headers, body): (HeaderMap<HeaderValue>, String)) -> Self {
+impl Delivery {
+    fn generate(headers: HeaderMap<HeaderValue>, body: String) -> Delivery {
+        let id = get_header_value!(&headers, "X-Github-Delivery");
+        let event = get_header_value!(&headers, "X-Github-Event");
+        let signature = get_header_value!(&headers, "X-Hub-Signature");
+        // TODO: Add functionality to parse the payload
         Self {
-            id: "Unimplemented",
-            event: "Unimplemented",
+            id,
+            event,
             unparsed_payload: body.clone(),
-            signature: None,
+            signature,
         }
     }
 }
@@ -170,7 +188,7 @@ impl Service for Handler {
                 .concat2()
                 .map(|chunk| String::from_utf8(chunk.to_vec()).unwrap())
                 .and_then(move |body| {
-                    executor.run(Delivery::from((headers, body)));
+                    executor.run(Delivery::generate(headers, body));
                     future::ok(
                         Response::builder()
                             .status(StatusCode::OK)
