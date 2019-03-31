@@ -1,50 +1,93 @@
+//! Hook
+//!
+//! Hook is a struct that contains the information needed for validating the payload and the work after that.
+//!
+//! ## Example
+//!
+//! To create a Hook object, use the new method:
+//!
+//! ```
+//! extern crate rifling;
+//!
+//! use rifling::{Hook, Delivery};
+//!
+//! // Create the hook
+//! let hook = Hook::new("push", None, |_: &Delivery| println!("Pushed!"));
+//! ```
+//!
+//! The last parameter is a trait object of the trait `HookFunc`, it's currently implemented to `Fn(&Delivery)`.
+//! `Delivery` contains the information of the request received.
+//!
+//! To use the hook, you need to register it to the `Constructor`.
+
 use hex::FromHex;
 use ring::digest;
 use ring::hmac;
 
 use super::handler::Delivery;
 
+/// The part of the hook that will be executed after validating the payload
 pub trait HookFunc: HookFuncClone + Sync + Send {
     fn run(&self, delivery: &Delivery);
 }
 
-// Inspired by https://stackoverflow.com/a/30353928
+/// To let `Clone` trait work for trait object, an extra trait like this is necessary.
+/// Inspired by https://stackoverflow.com/a/30353928
 pub trait HookFuncClone {
     fn clone_box(&self) -> Box<HookFunc>;
 }
 
+/// The actual hook, contains the event it's going to listen, the secret to authenticate the payload, and the function to execute.
 #[derive(Clone)]
 pub struct Hook {
     pub event: &'static str,
-    secret: Option<&'static str>,
-    func: Box<HookFunc>,
+    pub secret: Option<&'static str>,
+    pub func: Box<HookFunc>, // To allow the registration of multiple hooks, it has to be a trait object.
 }
 
+/// Implement `HookFunc` to `Fn(&Delivery)`.
 impl<F> HookFunc for F
 where
     F: Fn(&Delivery) + Clone + Sync + Send + 'static,
 {
+    /// Run the function
     fn run(&self, delivery: &Delivery) {
         self(delivery)
     }
 }
 
+/// To make `HookFunc` trait object cloneable
 impl<T> HookFuncClone for T
 where
     T: HookFunc + Clone + 'static,
 {
+    /// Create a cloned boxed `HookFunc` object.
     fn clone_box(&self) -> Box<HookFunc> {
         Box::new(self.clone())
     }
 }
 
+/// To make `HookFunc` trait object cloneable
 impl Clone for Box<HookFunc> {
+    /// Use `clone_box()` to clone it self.
     fn clone(&self) -> Box<HookFunc> {
         self.clone_box()
     }
 }
 
+/// Main impl clause of `Hook`()
 impl Hook {
+    /// Create a new hook
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// extern crate rifling;
+    ///
+    /// use rifling::{Hook, Delivery};
+    ///
+    /// let hook = Hook::new("push", None, |_: &Delivery| println!("Pushed!"));
+    /// ```
     pub fn new(
         event: &'static str,
         secret: Option<&'static str>,
@@ -57,6 +100,7 @@ impl Hook {
         }
     }
 
+    /// Authenticate the payload
     pub fn auth(&self, delivery: &Delivery) -> bool {
         if let Some(secret) = self.secret {
             if let Some(signature) = &delivery.signature {
@@ -76,6 +120,7 @@ impl Hook {
         return true;
     }
 
+    /// Handle the request
     pub fn handle_delivery(self, delivery: &Delivery) {
         if self.auth(delivery) {
             debug!("Valid payload found");

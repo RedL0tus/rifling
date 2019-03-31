@@ -1,3 +1,11 @@
+//! The handler of requests
+//!
+//! The `Handler` struct should be created automatically by constructor.
+//!
+//! Currently handler only supports `Hyper`, it is possible to make it support other frameworks.
+//!
+//! This part of the library shouldn't be used in most cases.
+
 use futures::stream::Stream;
 use futures::{future, Future};
 use hyper::service::Service;
@@ -9,6 +17,8 @@ use std::collections::HashMap;
 use super::constructor::{Constructor, HookRegistry};
 use super::hook::Hook;
 
+/// Find matched hooks from `HookRegistry`, accepting multiple keys.
+#[macro_export]
 macro_rules! hooks_find_match {
     ($results:expr, $source:expr, $($pattern:expr), *) => {
         $(
@@ -19,6 +29,7 @@ macro_rules! hooks_find_match {
     }
 }
 
+/// Get Option<String> typed header value from HeaderMap<HeaderValue> of hyper.
 macro_rules! get_header_value {
     ($headers:expr, $key:expr) => {
         if let Some(value) = $headers.get($key) {
@@ -33,6 +44,8 @@ macro_rules! get_header_value {
     };
 }
 
+/// Information gathered from the received request
+/// Not sure what is included in the request, so all of the fields are wrapped in `Option<T>`
 #[derive(Default, Debug, Clone)]
 pub struct Delivery {
     pub id: Option<String>,
@@ -42,15 +55,19 @@ pub struct Delivery {
     pub signature: Option<String>,
 }
 
+/// (Private) Executor of the hooks, passed into futures.
 struct Executor {
     matched_hooks: Vec<Hook>,
 }
 
+/// The main handler struct.
 pub struct Handler {
     hooks: HookRegistry,
 }
 
+/// The main impl clause of `Delivery`
 impl Delivery {
+    /// Create a new Delivery
     fn new(
         id: Option<String>,
         event: Option<String>,
@@ -69,7 +86,9 @@ impl Delivery {
     }
 }
 
+/// The main impl clause of `Executor`
 impl Executor {
+    /// Run the hooks
     fn run(self, delivery: Delivery) {
         for hook in self.matched_hooks {
             debug!("Running hook for '{}' event", &hook.event);
@@ -77,11 +96,13 @@ impl Executor {
         }
     }
 
+    /// Test if there are no matched hook found
     fn is_empty(&self) -> bool {
         self.matched_hooks.len() <= 0
     }
 }
 
+/// The main impl clause of Handler
 impl Handler {
     fn get_hooks(&self, event: &str) -> Executor {
         debug!("Finding macthed hooks for '{}' event", event);
@@ -94,7 +115,9 @@ impl Handler {
     }
 }
 
+/// Implement `From<&Constructor>` trait for `Handler`
 impl From<&Constructor> for Handler {
+    /// Create a handler object from constructor
     fn from(constructor: &Constructor) -> Self {
         Self {
             hooks: constructor.hooks.clone(),
@@ -102,12 +125,16 @@ impl From<&Constructor> for Handler {
     }
 }
 
+/// Implement `Service` struct from `Hyper` to `Handler`
 impl Service for Handler {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = Error;
     type Future = Box<Future<Item = Response<Body>, Error = Error> + Send + 'static>;
 
+    /// Handle the request
+    ///
+    /// It can definitely be simplified, and it's ugly, but it can work.
     fn call(&mut self, req: Request<Self::ReqBody>) -> Self::Future {
         let headers = req.headers().clone();
         let event = get_header_value!(headers, "X-Github-Event");
@@ -124,6 +151,7 @@ impl Service for Handler {
             let id = get_header_value!(&headers, "X-Github-Delivery");
             let signature = get_header_value!(&headers, "X-Hub-Signature");
             if let Some(content_type) = get_header_value!(&headers, "content-type") {
+                // Asynchronous programming without async_await looks terrible, at least for the indent part.
                 Box::new(
                     req.into_body()
                         .concat2()
