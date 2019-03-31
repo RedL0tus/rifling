@@ -1,7 +1,7 @@
 [package]
 name = "rifling"
 description = "A library for creating Github webhook listener"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Kay Lin <kaymw@aosc.io>"]
 edition = "2018"
 license = "MIT"
@@ -11,7 +11,7 @@ homepage = "https://github.com/RedL0tus/rifling"
 repository = "https://github.com/RedL0tus/rifling"
 
 [badges]
-maintaince = { status = "experimental" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 hex = "0.3"
