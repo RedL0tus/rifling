@@ -2,7 +2,7 @@
 name = "rifling"
 description = "A library for creating Github webhook listener"
 version = "0.1.1"
-authors = ["Kay Lin <kaymw@aosc.io>"]
+authors = ["Kay Lin <i@v2bv.net>"]
 edition = "2018"
 license = "MIT"
 readme = "README.md"
