@@ -7,8 +7,8 @@ extern crate pretty_env_logger;
 
 extern crate rifling;
 
-use hyper::Server;
 use hyper::rt::Future;
+use hyper::Server;
 
 use rifling::{Constructor, Delivery, Hook};
 
@@ -20,8 +20,12 @@ fn main() {
     }
     pretty_env_logger::init_custom_env("RIFLING_LOG");
     let mut cons = Constructor::new();
-    let hook = Hook::new("*", Some(String::from("secret")), |_: &Delivery| info!("Bazinga!"));
-    let another_hook = Hook::new("push", Some(String::from("secret")), |_: &Delivery| info!("Pushed!"));
+    let hook = Hook::new("*", Some(String::from("secret")), |_: &Delivery| {
+        info!("Bazinga!")
+    });
+    let another_hook = Hook::new("push", Some(String::from("secret")), |_: &Delivery| {
+        info!("Pushed!")
+    });
     cons.register(hook);
     cons.register(another_hook);
     let addr = "0.0.0.0:4567".parse().unwrap();

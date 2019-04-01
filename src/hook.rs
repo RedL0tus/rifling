@@ -88,11 +88,7 @@ impl Hook {
     ///
     /// let hook = Hook::new("push", None, |_: &Delivery| println!("Pushed!"));
     /// ```
-    pub fn new(
-        event: &'static str,
-        secret: Option<String>,
-        func: impl HookFunc + 'static,
-    ) -> Self {
+    pub fn new(event: &'static str, secret: Option<String>, func: impl HookFunc + 'static) -> Self {
         Self {
             event,
             secret,
