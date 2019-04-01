@@ -18,7 +18,7 @@
 //!
 //! fn main() {
 //!     let mut cons = Constructor::new();
-//!     let hook = Hook::new("*", Some("secret"), |delivery: &Delivery| println!("Received delivery: {:?}", delivery));
+//!     let hook = Hook::new("*", Some(String::from("secret")), |delivery: &Delivery| println!("Received delivery: {:?}", delivery));
 //!     cons.register(hook);
 //!     let addr = "0.0.0.0:4567".parse().unwrap();
 //!     let server = Server::bind(&addr).serve(cons).map_err(|e: Error| println!("Error: {:?}", e));

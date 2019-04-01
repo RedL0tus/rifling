@@ -41,7 +41,7 @@ pub trait HookFuncClone {
 #[derive(Clone)]
 pub struct Hook {
     pub event: &'static str,
-    pub secret: Option<&'static str>,
+    pub secret: Option<String>,
     pub func: Box<HookFunc>, // To allow the registration of multiple hooks, it has to be a trait object.
 }
 
@@ -90,7 +90,7 @@ impl Hook {
     /// ```
     pub fn new(
         event: &'static str,
-        secret: Option<&'static str>,
+        secret: Option<String>,
         func: impl HookFunc + 'static,
     ) -> Self {
         Self {
@@ -102,7 +102,7 @@ impl Hook {
 
     /// Authenticate the payload
     pub fn auth(&self, delivery: &Delivery) -> bool {
-        if let Some(secret) = self.secret {
+        if let Some(secret) = &self.secret {
             if let Some(signature) = &delivery.signature {
                 if let Some(request) = &delivery.request_body {
                     let signature_hex = signature[5..signature.len()].as_bytes();
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn payload_authentication() {
-        let secret = "secret";
+        let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Bazinga!"}"#);
         let request_body = payload.clone();
