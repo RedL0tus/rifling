@@ -24,17 +24,22 @@ use hex::FromHex;
 use ring::digest;
 use ring::hmac;
 
+use std::sync::Arc;
+
 use super::handler::Delivery;
 
-/// The part of the hook that will be executed after validating the payload
-pub trait HookFunc: HookFuncClone + Sync + Send {
-    fn run(&self, delivery: &Delivery);
+macro_rules! unwrap_or_false {
+    ($e:expr) => {
+        match $e {
+            Some(content) => content,
+            _ => return false,
+        }
+    };
 }
 
-/// To let `Clone` trait work for trait object, an extra trait like this is necessary.
-/// Inspired by https://stackoverflow.com/a/30353928
-pub trait HookFuncClone {
-    fn clone_box(&self) -> Box<HookFunc>;
+/// The part of the hook that will be executed after validating the payload
+pub trait HookFunc: Sync + Send {
+    fn run(&self, delivery: &Delivery);
 }
 
 /// The actual hook, contains the event it's going to listen, the secret to authenticate the payload, and the function to execute.
@@ -42,7 +47,7 @@ pub trait HookFuncClone {
 pub struct Hook {
     pub event: &'static str,
     pub secret: Option<String>,
-    pub func: Box<HookFunc>, // To allow the registration of multiple hooks, it has to be a trait object.
+    pub func: Arc<HookFunc>, // To allow the registration of multiple hooks, it has to be a trait object.
 }
 
 /// Implement `HookFunc` to `Fn(&Delivery)`.
@@ -53,25 +58,6 @@ where
     /// Run the function
     fn run(&self, delivery: &Delivery) {
         self(delivery)
-    }
-}
-
-/// To make `HookFunc` trait object cloneable
-impl<T> HookFuncClone for T
-where
-    T: HookFunc + Clone + 'static,
-{
-    /// Create a cloned boxed `HookFunc` object.
-    fn clone_box(&self) -> Box<HookFunc> {
-        Box::new(self.clone())
-    }
-}
-
-/// To make `HookFunc` trait object cloneable
-impl Clone for Box<HookFunc> {
-    /// Use `clone_box()` to clone it self.
-    fn clone(&self) -> Box<HookFunc> {
-        self.clone_box()
     }
 }
 
@@ -92,28 +78,28 @@ impl Hook {
         Self {
             event,
             secret,
-            func: Box::new(func),
+            func: Arc::new(func),
         }
     }
 
     /// Authenticate the payload
     pub fn auth(&self, delivery: &Delivery) -> bool {
         if let Some(secret) = &self.secret {
-            if let Some(signature) = &delivery.signature {
-                if let Some(request) = &delivery.request_body {
-                    let signature_hex = signature[5..signature.len()].as_bytes();
-                    if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
-                        let secret_bytes = secret.as_bytes();
-                        let request_bytes = request.as_bytes();
-                        let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
-                        return hmac::verify_with_own_key(&key, &request_bytes, &signature_bytes)
-                            .is_ok();
-                    }
-                }
+            let signature = unwrap_or_false!(&delivery.signature);
+            debug!("Signature: {}", signature);
+            let request_body = unwrap_or_false!(&delivery.request_body);
+            let signature_hex = signature[5..signature.len()].as_bytes();
+            if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
+                let secret_bytes = secret.as_bytes();
+                let request_body_bytes = request_body.as_bytes();
+                let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
+                return hmac::verify_with_own_key(&key, &request_body_bytes, &signature_bytes)
+                    .is_ok();
             }
             return false;
+        } else {
+            return true;
         }
-        return true;
     }
 
     /// Handle the request
@@ -134,6 +120,7 @@ mod tests {
     use ring::digest;
     use ring::hmac;
 
+    /// Test payload authentication: Valid signature
     #[test]
     fn payload_authentication() {
         let secret = String::from("secret");
@@ -157,5 +144,22 @@ mod tests {
             signature: Some(signature_field),
         };
         assert!(hook.auth(&delivery));
+    }
+
+    /// Test payload authentication: Invalid signature
+    #[test]
+    fn payload_authentication_fail() {
+        let secret = String::from("secret");
+        let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
+        let payload = String::from(r#"{"zen": "Another test!"}"#);
+        let signature = String::from("sha1=ec760ee6d10bf638089f078b5a0c23f6575821e7");
+        let delivery = Delivery {
+            id: None,
+            event: Some(String::from("push")),
+            unparsed_payload: Some(payload.clone()),
+            request_body: Some(payload),
+            signature: Some(signature),
+        };
+        assert_eq!(hook.auth(&delivery), false);
     }
 }

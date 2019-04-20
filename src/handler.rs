@@ -30,11 +30,11 @@ macro_rules! hooks_find_match {
 }
 
 /// Get Option<String> typed header value from HeaderMap<HeaderValue> of hyper.
-macro_rules! get_header_value {
+macro_rules! hyper_get_header_value {
     ($headers:expr, $key:expr) => {
         if let Some(value) = $headers.get($key) {
-            if let Ok(str) = value.to_str() {
-                Some(String::from(str.clone()))
+            if let Ok(inner) = value.to_str() {
+                Some(String::from(inner.clone()))
             } else {
                 None
             }
@@ -136,95 +136,72 @@ impl Service for Handler {
     ///
     /// It can definitely be simplified, and it's ugly, but it can work.
     fn call(&mut self, req: Request<Self::ReqBody>) -> Self::Future {
-        let headers = req.headers().clone();
-        let event = get_header_value!(headers, "X-Github-Event");
-        if let Some(event_string) = event {
-            let executor = self.get_hooks(event_string.as_str());
-            if executor.is_empty() {
-                return Box::new(future::ok(
-                    Response::builder()
-                        .status(StatusCode::ACCEPTED)
-                        .body("No matched hook found".into())
-                        .unwrap(),
-                ));
-            }
-            let id = get_header_value!(&headers, "X-Github-Delivery");
-            let signature = get_header_value!(&headers, "X-Hub-Signature");
-            if let Some(content_type) = get_header_value!(&headers, "content-type") {
-                // Asynchronous programming without async_await looks terrible, at least for the indent part.
-                Box::new(
-                    req.into_body()
-                        .concat2()
-                        .map(move |chunk| match content_type.as_str() {
-                            "application/json" => {
-                                if let Ok(payload) = String::from_utf8(chunk.to_vec()) {
-                                    let request_body = payload.clone();
-                                    (Some(payload), Some(request_body))
-                                } else {
-                                    (None, None)
-                                }
-                            }
-                            "application/x-www-form-urlencoded" => {
-                                let request_body = if let Ok(payload_body) =
-                                    String::from_utf8(chunk.to_vec().clone())
-                                {
-                                    Some(payload_body)
-                                } else {
-                                    None
-                                };
-                                let params = form_urlencoded::parse(chunk.as_ref())
-                                    .into_owned()
-                                    .collect::<HashMap<String, String>>();
-                                if let Some(payload) = params.get("payload") {
-                                    (Some(payload.clone()), request_body)
-                                } else {
-                                    (None, request_body)
-                                }
-                            }
-                            _ => (None, None),
-                        })
-                        .and_then(move |(payload, request_body)| {
-                            if payload.is_some() {
-                                let delivery = Delivery::new(
-                                    id,
-                                    Some(event_string),
-                                    signature,
-                                    payload,
-                                    request_body,
-                                );
-                                debug!("Received delivery: {:?}", &delivery);
-                                executor.run(delivery);
-                                future::ok(
-                                    Response::builder()
-                                        .status(StatusCode::OK)
-                                        .body("OK".into())
-                                        .unwrap(),
-                                )
-                            } else {
-                                future::ok(
-                                    Response::builder()
-                                        .status(StatusCode::ACCEPTED)
-                                        .body("Invalid payload".into())
-                                        .unwrap(),
-                                )
-                            }
-                        }),
-                )
-            } else {
-                Box::new(future::ok(
-                    Response::builder()
-                        .status(StatusCode::ACCEPTED)
-                        .body("Invalid payload".into())
-                        .unwrap(),
-                ))
-            }
-        } else {
-            Box::new(future::ok(
-                Response::builder()
-                    .status(StatusCode::ACCEPTED)
-                    .body("What are you doing here?".into())
-                    .unwrap(),
-            ))
+        fn response(status_code: StatusCode, body: &'static str) -> Response<Body> {
+            Response::builder()
+                .status(status_code)
+                .body(body.into())
+                .unwrap()
         }
+        let headers = req.headers().clone();
+        let event = if let Some(event_str) = hyper_get_header_value!(&headers, "X-Github-Event") {
+            event_str.clone()
+        } else {
+            // Invalid payload without a event header
+            return Box::new(future::ok(response(
+                StatusCode::ACCEPTED,
+                "Invalid payload",
+            )));
+        };
+        let executor = self.get_hooks(&event);
+        if executor.is_empty() {
+            // No matched hook found
+            return Box::new(future::ok(response(
+                StatusCode::ACCEPTED,
+                "No matched hook configured",
+            )));
+        }
+        let id = hyper_get_header_value!(&headers, "X-Github-Delivery");
+        let signature = hyper_get_header_value!(&headers, "X-Hub-Signature");
+        let content_type = hyper_get_header_value!(&headers, "content-type");
+        if let None = content_type.clone() {
+            // No valid content-type header found
+            return Box::new(future::ok(response(
+                StatusCode::ACCEPTED,
+                "Invalid payload",
+            )));
+        }
+        Box::new(
+            req.into_body()
+                .concat2()
+                .map(move |chunk| {
+                    let request_body = String::from_utf8(chunk.to_vec()).ok();
+                    match content_type.unwrap().as_str() {
+                        "application/json" => (request_body.clone(), request_body),
+                        "application/x-www-form-urlencoded" => {
+                            let params = form_urlencoded::parse(chunk.as_ref())
+                                .into_owned()
+                                .collect::<HashMap<String, String>>();
+                            let payload = if let Some(payload_string) = params.get("payload") {
+                                Some(payload_string.clone())
+                            } else {
+                                None
+                            };
+                            (payload, request_body)
+                        }
+                        _ => (None, None),
+                    }
+                })
+                .and_then(move |(payload, request_body)| {
+                    if payload.is_some() {
+                        let delivery =
+                            Delivery::new(id, Some(event), signature, payload, request_body);
+                        debug!("Received delivery: {:?}", &delivery);
+                        executor.run(delivery);
+                        future::ok(response(StatusCode::OK, "OK"))
+                    } else {
+                        future::ok(response(StatusCode::ACCEPTED, "Invalid payload"))
+                    }
+                }),
+        )
     }
 }
