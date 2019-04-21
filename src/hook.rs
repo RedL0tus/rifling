@@ -88,16 +88,20 @@ impl Hook {
             let signature = unwrap_or_false!(&delivery.signature);
             debug!("Signature: {}", signature);
             let request_body = unwrap_or_false!(&delivery.request_body);
+            debug!("Request body: {}", &request_body);
             let signature_hex = signature[5..signature.len()].as_bytes();
             if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
                 let secret_bytes = secret.as_bytes();
                 let request_body_bytes = request_body.as_bytes();
                 let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
+                debug!("Validating payload with secret");
                 return hmac::verify_with_own_key(&key, &request_body_bytes, &signature_bytes)
                     .is_ok();
             }
+            debug!("Invalid signature");
             return false;
         } else {
+            debug!("No secret given, passing...");
             return true;
         }
     }
@@ -106,7 +110,7 @@ impl Hook {
     pub fn handle_delivery(self, delivery: &Delivery) {
         if self.auth(delivery) {
             debug!("Valid payload found");
-            self.func.run(delivery)
+            self.func.run(delivery);
         }
         debug!("Invalid payload");
     }
@@ -139,6 +143,7 @@ mod tests {
         let delivery = Delivery {
             id: None,
             event: Some(String::from("push")),
+            payload: None,
             unparsed_payload: Some(payload),
             request_body: Some(request_body),
             signature: Some(signature_field),
@@ -156,6 +161,7 @@ mod tests {
         let delivery = Delivery {
             id: None,
             event: Some(String::from("push")),
+            payload: None,
             unparsed_payload: Some(payload.clone()),
             request_body: Some(payload),
             signature: Some(signature),

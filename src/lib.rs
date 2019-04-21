@@ -38,6 +38,7 @@ extern crate log;
 extern crate hyper;
 extern crate ring;
 extern crate url;
+extern crate serde_json;
 
 pub mod constructor;
 pub mod handler;

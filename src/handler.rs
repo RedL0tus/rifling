@@ -11,6 +11,7 @@ use futures::{future, Future};
 use hyper::service::Service;
 use hyper::{Body, Error, Request, Response, StatusCode};
 use url::form_urlencoded;
+use serde_json::Value;
 
 use std::collections::HashMap;
 
@@ -50,6 +51,7 @@ macro_rules! hyper_get_header_value {
 pub struct Delivery {
     pub id: Option<String>,
     pub event: Option<String>,
+    pub payload: Option<Value>,
     pub unparsed_payload: Option<String>,
     pub request_body: Option<String>, // for x-www-form-urlencoded authentication support
     pub signature: Option<String>,
@@ -76,9 +78,15 @@ impl Delivery {
         payload_body: Option<String>,
     ) -> Delivery {
         // TODO: Add functionality to parse the payload
+        let parsed_payload = if let Some(payload_string) = &payload {
+            serde_json::from_str(payload_string.as_str()).ok()
+        } else {
+            None
+        };
         Self {
             id,
             event,
+            payload: parsed_payload,
             unparsed_payload: payload,
             request_body: payload_body,
             signature,
