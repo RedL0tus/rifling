@@ -21,13 +21,15 @@ use super::hook::Hook;
 /// Find matched hooks from `HookRegistry`, accepting multiple keys.
 #[macro_export]
 macro_rules! hooks_find_match {
-    ($results:expr, $source:expr, $($pattern:expr), *) => {
+    ($source:expr, $($pattern:expr), *) => {{
+        let mut result: Vec<Hook> = Vec::new();
         $(
             if let Some(hook) = $source.get($pattern) {
-                $results.push(hook.clone())
+                result.push(hook.clone());
             }
         )*
-    }
+        result
+    }};
 }
 
 /// Get Option<String> typed header value from HeaderMap<HeaderValue> of hyper.
@@ -106,16 +108,15 @@ impl Executor {
 
     /// Test if there are no matched hook found
     fn is_empty(&self) -> bool {
-        self.matched_hooks.len() <= 0
+        self.matched_hooks.len() == 0
     }
 }
 
 /// The main impl clause of Handler
 impl Handler {
     fn get_hooks(&self, event: &str) -> Executor {
-        debug!("Finding macthed hooks for '{}' event", event);
-        let mut matched: Vec<Hook> = Vec::new();
-        hooks_find_match!(matched, self.hooks, event, "*");
+        debug!("Finding matched hooks for '{}' event", event);
+        let matched: Vec<Hook> = hooks_find_match!(self.hooks, event, "*");
         debug!("{} matched hook(s) found", matched.len());
         Executor {
             matched_hooks: matched,
@@ -171,7 +172,7 @@ impl Service for Handler {
         let id = hyper_get_header_value!(&headers, "X-Github-Delivery");
         let signature = hyper_get_header_value!(&headers, "X-Hub-Signature");
         let content_type = hyper_get_header_value!(&headers, "content-type");
-        if let None = content_type.clone() {
+        if content_type.is_none() {
             // No valid content-type header found
             return Box::new(future::ok(response(
                 StatusCode::ACCEPTED,

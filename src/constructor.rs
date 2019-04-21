@@ -28,7 +28,7 @@ use super::hook::Hook;
 pub type HookRegistry = HashMap<String, Hook>;
 
 /// Constructor of the server
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Constructor {
     pub hooks: HookRegistry,
 }
@@ -38,7 +38,7 @@ impl Constructor {
     /// Create a new, empty `Constructor`
     pub fn new() -> Constructor {
         Constructor {
-            hooks: HashMap::new(),
+            ..Default::default()
         }
     }
 
