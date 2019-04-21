@@ -28,6 +28,7 @@ use std::sync::Arc;
 
 use super::handler::Delivery;
 
+/// Unwrap `Option<T>` or return false
 macro_rules! unwrap_or_false {
     ($e:expr) => {
         match $e {
@@ -119,6 +120,7 @@ impl Hook {
 #[cfg(test)]
 mod tests {
     use super::super::handler::Delivery;
+    use super::super::handler::ContentType;
     use super::*;
     use hex::ToHex;
     use ring::digest;
@@ -140,14 +142,13 @@ mod tests {
             .write_hex(&mut signature)
             .unwrap();
         let signature_field = String::from(format!("sha1={}", signature));
-        let delivery = Delivery {
-            id: None,
-            event: Some(String::from("push")),
-            payload: None,
-            unparsed_payload: Some(payload),
-            request_body: Some(request_body),
-            signature: Some(signature_field),
-        };
+        let delivery = Delivery::new(
+            None,
+            Some(String::from("push")),
+            Some(signature_field),
+            ContentType::JSON,
+            Some(request_body),
+        );
         assert!(hook.auth(&delivery));
     }
 
@@ -157,15 +158,15 @@ mod tests {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Another test!"}"#);
+        let request_body = payload.clone();
         let signature = String::from("sha1=ec760ee6d10bf638089f078b5a0c23f6575821e7");
-        let delivery = Delivery {
-            id: None,
-            event: Some(String::from("push")),
-            payload: None,
-            unparsed_payload: Some(payload.clone()),
-            request_body: Some(payload),
-            signature: Some(signature),
-        };
+        let delivery = Delivery::new(
+            None,
+            Some(String::from("push")),
+            Some(signature),
+            ContentType::JSON,
+            Some(request_body),
+        );
         assert_eq!(hook.auth(&delivery), false);
     }
 }

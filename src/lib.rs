@@ -8,7 +8,7 @@
 //!
 //! Minimal Example:
 //!
-//! ```
+//! ```no_run
 //! extern crate hyper;
 //! extern crate rifling;
 //!
@@ -22,7 +22,7 @@
 //!     cons.register(hook);
 //!     let addr = "0.0.0.0:4567".parse().unwrap();
 //!     let server = Server::bind(&addr).serve(cons).map_err(|e: Error| println!("Error: {:?}", e));
-//!     // run(server); // Start the server, commented out because it will cause `cargo test` to hang.
+//!     run(server);
 //! }
 //! ```
 //!
@@ -37,16 +37,17 @@ extern crate hex;
 extern crate log;
 extern crate hyper;
 extern crate ring;
-extern crate url;
 extern crate serde_json;
+extern crate url;
 
-pub mod constructor;
 pub mod handler;
 pub mod hook;
 
-pub use constructor::Constructor;
+pub use handler::Constructor;
 pub use handler::Delivery;
+pub use handler::Handler;
 pub use hook::Hook;
+pub use hook::HookFunc;
 
 #[cfg(test)]
 mod tests {

@@ -22,7 +22,10 @@ fn main() {
     let mut cons = Constructor::new();
     let hook = Hook::new("*", Some(String::from("secret")), |delivery: &Delivery| {
         if let Some(payload) = &delivery.payload {
-            info!("Bazinga! Received \"{}\" action!", payload["action"].as_str().unwrap());
+            info!(
+                "Bazinga! Received \"{}\" action!",
+                payload["action"].as_str().unwrap()
+            );
         }
     });
     let another_hook = Hook::new("push", Some(String::from("secret")), |_: &Delivery| {
