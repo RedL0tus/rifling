@@ -29,6 +29,7 @@ use std::sync::Arc;
 use super::handler::Delivery;
 
 /// Unwrap `Option<T>` or return false
+#[macro_export]
 macro_rules! unwrap_or_false {
     ($e:expr) => {
         match $e {
@@ -39,6 +40,7 @@ macro_rules! unwrap_or_false {
 }
 
 /// The part of the hook that will be executed after validating the payload
+/// You can implement this trait to your own struct
 pub trait HookFunc: Sync + Send {
     fn run(&self, delivery: &Delivery);
 }
@@ -92,10 +94,11 @@ impl Hook {
             debug!("Request body: {}", &request_body);
             let signature_hex = signature[5..signature.len()].as_bytes();
             if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
+                // Why???
                 let secret_bytes = secret.as_bytes();
                 let request_body_bytes = request_body.as_bytes();
                 let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
-                debug!("Validating payload with secret");
+                debug!("Validating payload with given secret");
                 return hmac::verify_with_own_key(&key, &request_body_bytes, &signature_bytes)
                     .is_ok();
             }
@@ -119,8 +122,8 @@ impl Hook {
 
 #[cfg(test)]
 mod tests {
-    use super::super::handler::Delivery;
     use super::super::handler::ContentType;
+    use super::super::handler::Delivery;
     use super::*;
     use hex::ToHex;
     use ring::digest;

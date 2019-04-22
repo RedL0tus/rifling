@@ -49,6 +49,7 @@ impl NewService for Constructor {
 
     /// Create a new handler to handle the service
     fn new_service(&self) -> Self::Future {
+        debug!("Creating new service");
         Box::new(future::ok(Handler::from(self)))
     }
 }
@@ -61,8 +62,6 @@ impl Service for Handler {
     type Future = Box<Future<Item = Response<Body>, Error = Error> + Send + 'static>;
 
     /// Handle the request
-    ///
-    /// It can definitely be simplified, and it's ugly, but it can work.
     fn call(&mut self, req: Request<Self::ReqBody>) -> Self::Future {
         fn response(status_code: StatusCode, body: &'static str) -> Response<Body> {
             Response::builder()
@@ -70,17 +69,20 @@ impl Service for Handler {
                 .body(body.into())
                 .unwrap()
         }
-        let headers = req.headers().clone();
-        let event = if let Some(event_str) = hyper_get_header_value!(&headers, "X-Github-Event") {
-            event_str.clone()
-        } else {
-            // Invalid payload without a event header
-            return Box::new(future::ok(response(
-                StatusCode::ACCEPTED,
-                "Invalid payload",
-            )));
-        };
-        let executor = self.get_hooks(&event);
+        let headers = req.headers();
+        let (event, executor) =
+            if let Some(event_string) = hyper_get_header_value!(&headers, "X-Github-Event") {
+                (
+                    Some(event_string.clone()),
+                    self.get_hooks(event_string.as_str()),
+                )
+            } else {
+                // Invalid payload without a event header
+                return Box::new(future::ok(response(
+                    StatusCode::ACCEPTED,
+                    "Invalid payload",
+                )));
+            };
         if executor.is_empty() {
             // No matched hook found
             return Box::new(future::ok(response(
@@ -109,8 +111,8 @@ impl Service for Handler {
                     };
                     if request_body.is_some() {
                         let delivery =
-                            Delivery::new(id, Some(event), signature, content_type, request_body);
-                        debug!("Received delivery: {:?}", &delivery);
+                            Delivery::new(id, event, signature, content_type, request_body);
+                        debug!("Received delivery: {:#?}", &delivery);
                         executor.run(delivery);
                         future::ok(response(StatusCode::OK, "OK"))
                     } else {

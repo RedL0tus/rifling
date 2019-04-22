@@ -30,6 +30,7 @@ macro_rules! hooks_find_match {
     }};
 }
 
+/// Type of content
 pub enum ContentType {
     JSON,
     URLENCODED,
@@ -87,12 +88,12 @@ impl Delivery {
         event: Option<String>,
         signature: Option<String>,
         content_type: ContentType,
-        payload_body: Option<String>,
+        request_body: Option<String>,
     ) -> Delivery {
         let payload: Option<String> = match content_type {
-            ContentType::JSON => payload_body.clone(),
+            ContentType::JSON => request_body.clone(),
             ContentType::URLENCODED => {
-                if let Some(request_body_string) = &payload_body {
+                if let Some(request_body_string) = &request_body {
                     if let Some(payload_string) =
                         form_urlencoded::parse(request_body_string.as_bytes())
                             .into_owned()
@@ -108,17 +109,19 @@ impl Delivery {
                 }
             }
         };
+        debug!("Payload body: {:?}", &payload);
         let parsed_payload = if let Some(payload_string) = &payload {
             serde_json::from_str(payload_string.as_str()).ok()
         } else {
             None
         };
+        debug!("Parsed payload: {:#?}", &parsed_payload);
         Self {
             id,
             event,
             payload: parsed_payload,
             unparsed_payload: payload,
-            request_body: payload_body,
+            request_body,
             signature,
         }
     }
@@ -143,7 +146,7 @@ impl Executor {
 /// The main impl clause of Handler
 impl Handler {
     fn get_hooks(&self, event: &str) -> Executor {
-        debug!("Finding matched hooks for '{}' event", event);
+        debug!("Finding matched hooks for '{}' event", &event);
         let matched: Vec<Hook> = hooks_find_match!(self.hooks, event, "*");
         debug!("{} matched hook(s) found", matched.len());
         Executor {
@@ -157,6 +160,7 @@ impl Handler {
 impl From<&Constructor> for Handler {
     /// Create a handler object from constructor
     fn from(constructor: &Constructor) -> Self {
+        debug!("Handler constructed");
         Self {
             hooks: constructor.hooks.clone(),
         }

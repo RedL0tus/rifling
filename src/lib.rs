@@ -26,9 +26,7 @@
 //! }
 //! ```
 //!
-//!
 //! TODO in future versions:
-//!  - Support for parsing payload.
 //!  - Error handling.
 //!  - Support other web frameworks (such as Tide).
 
