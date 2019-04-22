@@ -4,8 +4,10 @@
 //!
 //! The `Handler` struct should be created automatically by constructor, it is the actual handler of requests.
 
+#[cfg(feature = "hyper-support")]
 mod hyper;
 
+#[cfg(feature = "parse")]
 use serde_json::Value;
 use url::form_urlencoded;
 
@@ -110,8 +112,12 @@ impl Delivery {
             }
         };
         debug!("Payload body: {:?}", &payload);
-        let parsed_payload = if let Some(payload_string) = &payload {
-            serde_json::from_str(payload_string.as_str()).ok()
+        let parsed_payload = if cfg!(feature = "parse") {
+            if let Some(payload_string) = &payload {
+                serde_json::from_str(payload_string.as_str()).ok()
+            } else {
+                None
+            }
         } else {
             None
         };
