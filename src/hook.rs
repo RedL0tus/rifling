@@ -105,7 +105,6 @@ impl Hook {
             debug!("Request body: {}", &request_body);
             let signature_hex = signature[5..signature.len()].as_bytes();
             if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
-                // Why???
                 let secret_bytes = secret.as_bytes();
                 let request_body_bytes = request_body.as_bytes();
                 let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
