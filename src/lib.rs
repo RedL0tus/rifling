@@ -33,8 +33,12 @@
 extern crate hex;
 #[macro_use]
 extern crate log;
+#[cfg(feature = "hyper-support")]
+extern crate futures;
+#[cfg(feature = "hyper-support")]
 extern crate hyper;
 extern crate ring;
+#[cfg(feature = "parse")]
 extern crate serde_json;
 extern crate url;
 
