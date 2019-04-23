@@ -35,11 +35,16 @@ extern crate hex;
 extern crate log;
 #[cfg(feature = "hyper-support")]
 extern crate futures;
+#[cfg(feature = "crypto-use-rustcrypto")]
+extern crate hmac;
 #[cfg(feature = "hyper-support")]
 extern crate hyper;
+#[cfg(feature = "crypto-use-ring")]
 extern crate ring;
 #[cfg(feature = "parse")]
 extern crate serde_json;
+#[cfg(feature = "crypto-use-rustcrypto")]
+extern crate sha1;
 extern crate url;
 
 pub mod handler;

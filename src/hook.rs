@@ -20,13 +20,23 @@
 //!
 //! To use the hook, you need to register it to the `Constructor`.
 
+#[cfg(any(feature = "crypto-use-rustcrypto", feature = "crypto-use-ring"))]
 use hex::FromHex;
+#[cfg(feature = "crypto-use-rustcrypto")]
+use hmac::{Hmac, Mac};
+#[cfg(feature = "crypto-use-ring")]
 use ring::digest;
+#[cfg(feature = "crypto-use-ring")]
 use ring::hmac;
+#[cfg(feature = "crypto-use-rustcrypto")]
+use sha1::Sha1;
 
 use std::sync::Arc;
 
 use super::handler::Delivery;
+
+#[cfg(feature = "crypto-use-rustcrypto")]
+type HmacSha1 = Hmac<Sha1>;
 
 /// Unwrap `Option<T>` or return false
 #[macro_export]
@@ -85,7 +95,8 @@ impl Hook {
         }
     }
 
-    /// Authenticate the payload
+    #[cfg(feature = "crypto-use-ring")]
+    /// Authenticate the payload using `ring`
     pub fn auth(&self, delivery: &Delivery) -> bool {
         if let Some(secret) = &self.secret {
             let signature = unwrap_or_false!(&delivery.signature);
@@ -110,6 +121,37 @@ impl Hook {
         }
     }
 
+    #[cfg(feature = "crypto-use-rustcrypto")]
+    /// Authenticate the payload using crates provided by RustCrypto team
+    pub fn auth(&self, delivery: &Delivery) -> bool {
+        if let Some(secret) = &self.secret {
+            let signature = unwrap_or_false!(&delivery.signature);
+            debug!("Signature: {}", &signature);
+            let request_body = unwrap_or_false!(&delivery.request_body);
+            debug!("Request body: {}", &request_body);
+            let signature_hex = signature[5..signature.len()].as_bytes();
+            if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
+                let secret_bytes = secret.as_bytes();
+                let request_body_bytes = request_body.as_bytes();
+                let mut mac = unwrap_or_false!(HmacSha1::new_varkey(secret_bytes).ok());
+                mac.input(request_body_bytes);
+                debug!("Validating payload with given secret");
+                return mac.verify(&signature_bytes).is_ok();
+            }
+            debug!("Invalid signature");
+            return false;
+        } else {
+            debug!("No secret given, passing...");
+            return false;
+        }
+    }
+
+    #[cfg(all(not(feature = "crypto-use-rustcrypto"), not(feature = "crypto-use-ring")))]
+    pub fn auth(&self, _: &Delivery) -> bool {
+        info!("Payload authentication not enabled, passing...");
+        true
+    }
+
     /// Handle the request
     pub fn handle_delivery(self, delivery: &Delivery) {
         if self.auth(delivery) {
@@ -120,18 +162,23 @@ impl Hook {
     }
 }
 
+#[cfg(any(feature = "crypto-use-rustcrypto", feature = "crypto-use-ring"))]
 #[cfg(test)]
 mod tests {
     use super::super::handler::ContentType;
-    use super::super::handler::Delivery;
+    #[cfg(feature = "crypto-use-rustcrypto")]
+    use super::HmacSha1;
     use super::*;
     use hex::ToHex;
+    #[cfg(feature = "crypto-use-ring")]
     use ring::digest;
+    #[cfg(feature = "crypto-use-ring")]
     use ring::hmac;
 
-    /// Test payload authentication: Valid signature
+    /// Test payload authentication with `ring`: Valid signature
+    #[cfg(feature = "crypto-use-ring")]
     #[test]
-    fn payload_authentication() {
+    fn payload_authentication_ring() {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Bazinga!"}"#);
@@ -153,6 +200,36 @@ mod tests {
             Some(request_body),
         );
         assert!(hook.auth(&delivery));
+    }
+
+    /// Test payload authentication with crates from RustCrypto team: Valid signature
+    #[cfg(feature = "crypto-use-rustcrypto")]
+    #[test]
+    fn payload_authentication_rustcrypto() {
+        let secret = String::from("secret");
+        let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
+        let payload = String::from(r#"{"zen": "Bazinga!"}"#);
+        let request_body = payload.clone();
+        let secret_bytes = secret.as_bytes();
+        let request_bytes = request_body.as_bytes();
+        let mut mac = HmacSha1::new_varkey(&secret_bytes).expect("Invalid key");
+        mac.input(&request_bytes);
+        let mut signature = String::new();
+        mac.result()
+            .code()
+            .as_ref()
+            .write_hex(&mut signature)
+            .expect("Invalid signature");
+        let signature_field = String::from(format!("sha1={}", signature));
+        let delivery = Delivery::new(
+            None,
+            Some(String::from("push")),
+            Some(signature_field),
+            ContentType::JSON,
+            Some(request_body),
+        );
+        assert!(hook.auth(&delivery));
+        //assert!(true);
     }
 
     /// Test payload authentication: Invalid signature
