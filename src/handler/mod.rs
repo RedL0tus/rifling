@@ -38,6 +38,11 @@ pub enum ContentType {
     URLENCODED,
 }
 
+#[cfg(not(feature = "parse"))]
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub enum Value {}
+
 /// Constructor of the server
 #[derive(Clone, Default)]
 pub struct Constructor {
@@ -112,15 +117,14 @@ impl Delivery {
             }
         };
         debug!("Payload body: {:?}", &payload);
-        let parsed_payload = if cfg!(feature = "parse") {
-            if let Some(payload_string) = &payload {
-                serde_json::from_str(payload_string.as_str()).ok()
-            } else {
-                None
-            }
+        #[cfg(feature = "parse")]
+        let parsed_payload = if let Some(payload_string) = &payload {
+            serde_json::from_str(payload_string.as_str()).ok()
         } else {
             None
         };
+        #[cfg(not(feature = "parse"))]
+        let parsed_payload = None;
         debug!("Parsed payload: {:#?}", &parsed_payload);
         Self {
             id,
