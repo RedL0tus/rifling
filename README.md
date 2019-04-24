@@ -10,7 +10,7 @@ If you want a commandline tool rather than a library, please consult [trigger](h
 Features
 --------
 
- - Supports both `application/json` mode and `application/x-www-form-urlencoded` mode.
+ - Supports both `application/json` mode and (optionally) `application/x-www-form-urlencoded` mode.
  - (Potentially) support for different web frameworks.
  - Optional payload parsing support. Using `serde_json`'s untyped parsing functionality.
  - Optional payload authentication support with `ring` or libraries from RustCrypto team.
@@ -24,6 +24,8 @@ Optional features
  - Payload authentication (does not affect usage):
    - `crypto-use-ring` (default): Use [`ring`](https://crates.io/crates/ring) as cryptography library. This MAY be faster but has some C code.
    - `crypto-use-rustcrypto`: Use libraries from RustCrypto team ([`hmac`](https://crates.io/crates/hmac) and [`sha-1`](https://crates.io/crates/sha-1)). These libraries are pure Rust implementations of these algorithms, which can be linked with `musl`.
+ - Payload content type:
+   - `content-type-urlencoded` (enabled by default): Support for `application/x-www-form-urlencoded` typed content.
  - Payload parsing:
    - `parse` (default): Parse the payload. Parsed payload will be present in `Delivery.payload` as `Option<Value>`.
  - Logging:

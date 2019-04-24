@@ -47,6 +47,7 @@ extern crate ring;
 extern crate serde_json;
 #[cfg(feature = "crypto-use-rustcrypto")]
 extern crate sha1;
+#[cfg(feature = "content-type-urlencoded")]
 extern crate url;
 
 #[doc(hidden)]

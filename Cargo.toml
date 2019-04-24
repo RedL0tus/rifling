@@ -14,18 +14,19 @@ repository = "https://github.com/RedL0tus/rifling"
 maintenance = { status = "experimental" }
 
 [features]
-default = ["hyper-support", "parse", "crypto-use-ring", "logging"]
+default = ["hyper-support", "parse", "crypto-use-ring", "logging", "content-type-urlencoded"]
 hyper-support = ["hyper", "futures"]
 parse = ["serde_json"]
 crypto-use-ring = ["ring", "hex"]
 crypto-use-rustcrypto = ["hmac", "sha-1", "hex"]
 logging = ["log"]
 logging-print = []
+content-type-urlencoded = ["url"]
 
 [dependencies]
 hex = { version = "0.3", optional = true }
 log = { version = "0.4", optional = true }
-url = "1.7"
+url = { version = "1.7", optional = true }
 hmac = { version = "0.7", optional = true }
 ring = { version = "0.14", optional = true }
 hyper = { version = "0.12", optional = true }
@@ -39,4 +40,3 @@ pretty_env_logger = "0.3"
 [[example]]
 name = "hyper-simple"
 path = "examples/hyper-simple.rs"
-required-features = ["hyper-support", "parse", "crypto-use-rustcrypto", "logging"]

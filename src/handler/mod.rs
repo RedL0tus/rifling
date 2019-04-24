@@ -9,6 +9,7 @@ mod hyper;
 
 #[cfg(feature = "parse")]
 use serde_json::Value;
+#[cfg(feature = "content-type-urlencoded")]
 use url::form_urlencoded;
 
 use std::collections::HashMap;
@@ -99,6 +100,7 @@ impl Delivery {
     ) -> Delivery {
         let payload: Option<String> = match content_type {
             ContentType::JSON => request_body.clone(),
+            #[cfg(feature = "content-type-urlencoded")]
             ContentType::URLENCODED => {
                 if let Some(request_body_string) = &request_body {
                     if let Some(payload_string) =
@@ -115,6 +117,8 @@ impl Delivery {
                     None
                 }
             }
+            #[cfg(not(feature = "content-type-urlencoded"))]
+            _ => None,
         };
         debug!("Payload body: {:?}", &payload);
         #[cfg(feature = "parse")]

@@ -145,7 +145,10 @@ impl Hook {
         }
     }
 
-    #[cfg(all(not(feature = "crypto-use-rustcrypto"), not(feature = "crypto-use-ring")))]
+    #[cfg(all(
+        not(feature = "crypto-use-rustcrypto"),
+        not(feature = "crypto-use-ring")
+    ))]
     pub fn auth(&self, _: &Delivery) -> bool {
         info!("Payload authentication not enabled, passing...");
         true
