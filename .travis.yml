@@ -1,0 +1,20 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+cache: cargo
+script:
+  - cargo check --all
+  - cargo check --no-default-features
+  - cargo check --no-default-features --features "hyper-support"
+  - cargo check --no-default-features --features "parse"
+  - cargo check --no-default-features --features "crypto-use-ring"
+  - cargo check --no-default-features --features "cryoto-use-rustcrypto"
+  - cargo check --no-default-features --features "logging"
+  - cargo check --no-default-features --features "logging-print"
+  - cargo check --no-default-features --features "content-type-urlencoded"
+  - cargo test --all
+  - cargo test --no-default-features --features "hyper-support"
+  - cargo test --no-default-features --features "hyper-support logging crypto-use-ring"
+  - cargo test --no-default-features --features "hyper-support logging crypto-use-rustcrypto"
