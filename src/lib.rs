@@ -32,6 +32,7 @@
 
 #[cfg(any(feature = "crypto-use-ring", feature = "crypto-use-rustcrypto"))]
 extern crate hex;
+#[cfg(feature = "logging")]
 #[macro_use]
 extern crate log;
 #[cfg(feature = "hyper-support")]
@@ -48,6 +49,9 @@ extern crate serde_json;
 extern crate sha1;
 extern crate url;
 
+#[doc(hidden)]
+#[macro_use]
+mod macros;
 pub mod handler;
 pub mod hook;
 
