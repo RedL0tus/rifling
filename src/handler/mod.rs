@@ -39,6 +39,13 @@ pub enum ContentType {
     URLENCODED,
 }
 
+/// Source of the delivery
+#[derive(Clone, Debug)]
+pub enum DeliveryType {
+    GitHub,
+    GitLab,
+}
+
 #[cfg(not(feature = "parse"))]
 #[doc(hidden)]
 #[derive(Debug, Clone)]
@@ -52,8 +59,9 @@ pub struct Constructor {
 
 /// Information gathered from the received request
 /// Not sure what is included in the request, so all of the fields are wrapped in `Option<T>`
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Delivery {
+    pub delivery_type: DeliveryType,
     pub id: Option<String>,
     pub event: Option<String>,
     pub payload: Option<Value>,
@@ -92,6 +100,7 @@ impl Constructor {
 impl Delivery {
     /// Create a new Delivery
     pub fn new(
+        delivery_type: DeliveryType,
         id: Option<String>,
         event: Option<String>,
         signature: Option<String>,
@@ -131,6 +140,7 @@ impl Delivery {
         let parsed_payload = None;
         debug!("Parsed payload: {:#?}", &parsed_payload);
         Self {
+            delivery_type,
             id,
             event,
             payload: parsed_payload,

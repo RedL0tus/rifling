@@ -21,6 +21,7 @@ use hyper::{Body, Error, Request, Response, StatusCode};
 use super::Constructor;
 use super::ContentType;
 use super::Delivery;
+use super::DeliveryType;
 use super::Handler;
 
 /// Get Option<String> typed header value from HeaderMap<HeaderValue> of hyper.
@@ -70,12 +71,11 @@ impl Service for Handler {
                 .unwrap()
         }
         let headers = req.headers();
-        let (event, executor) =
+        let (mut event, delivery_type) =
             if let Some(event_string) = hyper_get_header_value!(&headers, "X-Github-Event") {
-                (
-                    Some(event_string.clone()),
-                    self.get_hooks(event_string.as_str()),
-                )
+                (event_string.clone(), DeliveryType::GitHub)
+            } else if let Some(event_string) = hyper_get_header_value!(&headers, "X-Gitlab-Event") {
+                (event_string.clone(), DeliveryType::GitLab)
             } else {
                 // Invalid payload without a event header
                 return Box::new(future::ok(response(
@@ -83,6 +83,9 @@ impl Service for Handler {
                     "Invalid payload",
                 )));
             };
+        event.make_ascii_lowercase();
+        event = event.replace(" ", "_");
+        let executor = self.get_hooks(event.as_str());
         if executor.is_empty() {
             // No matched hook found
             return Box::new(future::ok(response(
@@ -91,7 +94,10 @@ impl Service for Handler {
             )));
         }
         let id = hyper_get_header_value!(&headers, "X-Github-Delivery");
-        let signature = hyper_get_header_value!(&headers, "X-Hub-Signature");
+        let signature = match delivery_type {
+            DeliveryType::GitHub => hyper_get_header_value!(&headers, "X-Hub-Signature"),
+            DeliveryType::GitLab => hyper_get_header_value!(&headers, "X-Gitlab-Token"),
+        };
         let content_type = hyper_get_header_value!(&headers, "content-type");
         if content_type.is_none() {
             // No valid content-type header found
@@ -110,8 +116,14 @@ impl Service for Handler {
                         _ => ContentType::JSON, // Default
                     };
                     if request_body.is_some() {
-                        let delivery =
-                            Delivery::new(id, event, signature, content_type, request_body);
+                        let delivery = Delivery::new(
+                            delivery_type,
+                            id,
+                            Some(event),
+                            signature,
+                            content_type,
+                            request_body,
+                        );
                         debug!("Received delivery: {:#?}", &delivery);
                         executor.run(delivery);
                         future::ok(response(StatusCode::OK, "OK"))

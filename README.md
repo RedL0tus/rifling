@@ -3,13 +3,14 @@ Rifling
 
 [![license](https://img.shields.io/github/license/RedL0tus/rifling.svg)](LICENSE) [![crates.io](http://meritbadge.herokuapp.com/rifling)](https://crates.io/crates/rifling) [![docs.rs](https://docs.rs/rifling/badge.svg)](https://docs.rs/rifling/)
 
-Rifling is a library to create Github Webhook listener, influenced by [afterparty](https://crates.io/crates/afterparty).
+Rifling is a library to create Github/GitLab Webhook listener, influenced by [afterparty](https://crates.io/crates/afterparty).
 
 If you want a commandline tool rather than a library, please consult [trigger](https://github.com/RedL0tus/trigger).
 
 Features
 --------
 
+ - Supports both GitHub and GitLab.
  - Supports both `application/json` mode and (optionally) `application/x-www-form-urlencoded` mode.
  - (Potentially) support for different web frameworks.
  - Optional payload parsing support. Using `serde_json`'s untyped parsing functionality.
@@ -31,6 +32,13 @@ Optional features
  - Logging:
    - `logging` (default): Use the official [`log`](https://crates.io/crates/log) crate to log.
    - `logging-print`: Use `println` macro to print log. Will be ignored when `logging` is enabled.
+
+Notes
+-----
+
+ - Debug logs are useful to find problems.
+ - Events received from GitLab will be patched by lower casing and replacing " "(whitespace) with "_"(underscore).
+   - e.g. `Push Hook` will be `push_hook` while registering hooks.
 
 License
 -------

@@ -1,12 +1,12 @@
 [package]
 name = "rifling"
-description = "A library for creating Github webhook listener"
+description = "A library for creating Github/Gitlab webhook listener"
 version = "0.3.3"
 authors = ["Kay Lin <i@v2bv.net>"]
 edition = "2018"
 license = "MIT"
 readme = "README.md"
-keywords = ["github", "webhook", "ci"]
+keywords = ["github", "gitlab", "webhook", "ci"]
 homepage = "https://github.com/RedL0tus/rifling"
 repository = "https://github.com/RedL0tus/rifling"
 

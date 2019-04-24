@@ -57,7 +57,9 @@ pub mod handler;
 pub mod hook;
 
 pub use handler::Constructor;
+pub use handler::ContentType;
 pub use handler::Delivery;
+pub use handler::DeliveryType;
 pub use handler::Handler;
 pub use hook::Hook;
 pub use hook::HookFunc;
