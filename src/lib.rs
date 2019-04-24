@@ -30,6 +30,7 @@
 //!  - Error handling.
 //!  - Support other web frameworks (such as Tide).
 
+#[cfg(any(feature = "crypto-use-ring", feature = "crypto-use-rustcrypto"))]
 extern crate hex;
 #[macro_use]
 extern crate log;

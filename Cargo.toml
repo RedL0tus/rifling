@@ -17,11 +17,11 @@ maintenance = { status = "experimental" }
 default = ["hyper-support", "parse", "crypto-use-ring"]
 hyper-support = ["hyper", "futures"]
 parse = ["serde_json"]
-crypto-use-ring = ["ring"]
-crypto-use-rustcrypto = ["hmac", "sha-1"]
+crypto-use-ring = ["ring", "hex"]
+crypto-use-rustcrypto = ["hmac", "sha-1", "hex"]
 
 [dependencies]
-hex = "0.3"
+hex = { version = "0.3", optional = true }
 log = "0.4"
 url = "1.7"
 hmac = { version = "0.7", optional = true }
