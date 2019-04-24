@@ -10,7 +10,7 @@ script:
   - cargo check --no-default-features --features "hyper-support"
   - cargo check --no-default-features --features "parse"
   - cargo check --no-default-features --features "crypto-use-ring"
-  - cargo check --no-default-features --features "cryoto-use-rustcrypto"
+  - cargo check --no-default-features --features "crypto-use-rustcrypto"
   - cargo check --no-default-features --features "logging"
   - cargo check --no-default-features --features "logging-print"
   - cargo check --no-default-features --features "content-type-urlencoded"

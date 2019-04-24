@@ -1,7 +1,10 @@
 Rifling
 =======
 
-[![license](https://img.shields.io/github/license/RedL0tus/rifling.svg)](LICENSE) [![crates.io](http://meritbadge.herokuapp.com/rifling)](https://crates.io/crates/rifling) [![docs.rs](https://docs.rs/rifling/badge.svg)](https://docs.rs/rifling/)
+[![license](https://img.shields.io/github/license/RedL0tus/rifling.svg)](LICENSE)
+[![crates.io](http://meritbadge.herokuapp.com/rifling)](https://crates.io/crates/rifling)
+[![docs.rs](https://docs.rs/rifling/badge.svg)](https://docs.rs/rifling/)
+[![Build Status](https://travis-ci.org/RedL0tus/rifling.svg?branch=master)](https://travis-ci.org/RedL0tus/rifling)
 
 Rifling is a library to create Github/GitLab Webhook listener, influenced by [afterparty](https://crates.io/crates/afterparty).
 

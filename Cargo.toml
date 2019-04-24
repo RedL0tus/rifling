@@ -11,7 +11,7 @@ homepage = "https://github.com/RedL0tus/rifling"
 repository = "https://github.com/RedL0tus/rifling"
 
 [badges]
-maintenance = { status = "experimental" }
+travis-ci = { repository = "RedL0tus/rifling", branch = "master" }
 
 [features]
 default = ["hyper-support", "parse", "crypto-use-ring", "logging", "content-type-urlencoded"]
