@@ -11,7 +11,7 @@ macro_rules! debug {
 #[cfg(not(feature = "logging"))]
 #[doc(hidden)]
 #[macro_export]
-macro_rules! error {
+macro_rules! info {
     ($($element:expr), *) => {
         #[cfg(feature = "logging-print")]
         println!($($element, )*);
@@ -21,7 +21,17 @@ macro_rules! error {
 #[cfg(not(feature = "logging"))]
 #[doc(hidden)]
 #[macro_export]
-macro_rules! info {
+macro_rules! warn {
+    ($($element:expr), *) => {
+        #[cfg(feature = "logging-print")]
+        println!($($element, )*);
+    };
+}
+
+#[cfg(not(feature = "logging"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! error {
     ($($element:expr), *) => {
         #[cfg(feature = "logging-print")]
         println!($($element, )*);

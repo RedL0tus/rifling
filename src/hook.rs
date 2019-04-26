@@ -97,106 +97,80 @@ impl Hook {
     }
 
     #[cfg(feature = "crypto-use-ring")]
-    /// Authenticate the payload using `ring`
-    pub fn auth(&self, delivery: &Delivery) -> bool {
-        if let Some(secret) = &self.secret {
-            let signature = unwrap_or_false!(&delivery.signature);
-            debug!("Signature/Token: {}", signature);
-            match delivery.delivery_type {
-                DeliveryType::GitHub => {
-                    let request_body = unwrap_or_false!(&delivery.request_body);
-                    debug!("Request body: {}", &request_body);
-                    let signature_hex = signature[5..signature.len()].as_bytes();
-                    if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
-                        let secret_bytes = secret.as_bytes();
-                        let request_body_bytes = request_body.as_bytes();
-                        let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
-                        debug!("Validating payload with given secret");
-                        return hmac::verify_with_own_key(
-                            &key,
-                            &request_body_bytes,
-                            &signature_bytes,
-                        )
-                        .is_ok();
-                    }
-                    debug!("Invalid signature");
-                    return false;
-                }
-                DeliveryType::GitLab => {
-                    if signature == secret {
-                        return true;
-                    } else {
-                        debug!("Invalid token");
-                        return false;
-                    }
-                }
-            }
-        } else {
-            debug!("No secret given, passing...");
-            return true;
+    /// Authenticate the payload from GitHub using `ring`
+    pub fn auth_github(&self, delivery: &Delivery) -> bool {
+        let secret = unwrap_or_false!(&self.secret);
+        let signature = unwrap_or_false!(&delivery.signature);
+        debug!("Received signature: {}", signature);
+        let request_body = unwrap_or_false!(&delivery.request_body);
+        debug!("Request body: {}", &request_body);
+        let signature_hex = signature[5..signature.len()].as_bytes();
+        if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
+            let secret_bytes = secret.as_bytes();
+            let request_body_bytes = request_body.as_bytes();
+            let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
+            debug!("Validating payload with given secret");
+            return hmac::verify_with_own_key(
+                &key,
+                &request_body_bytes,
+                &signature_bytes,
+            )
+            .is_ok();
         }
+        debug!("Invalid signature");
+        return false;
     }
 
     #[cfg(feature = "crypto-use-rustcrypto")]
-    /// Authenticate the payload using crates provided by RustCrypto team
-    pub fn auth(&self, delivery: &Delivery) -> bool {
-        if let Some(secret) = &self.secret {
-            let signature = unwrap_or_false!(&delivery.signature);
-            debug!("Signature/Token: {}", &signature);
-            match delivery.delivery_type {
-                DeliveryType::GitHub => {
-                    let request_body = unwrap_or_false!(&delivery.request_body);
-                    debug!("Request body: {}", &request_body);
-                    let signature_hex = signature[5..signature.len()].as_bytes();
-                    if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
-                        let secret_bytes = secret.as_bytes();
-                        let request_body_bytes = request_body.as_bytes();
-                        let mut mac = unwrap_or_false!(HmacSha1::new_varkey(secret_bytes).ok());
-                        mac.input(request_body_bytes);
-                        debug!("Validating payload with given secret");
-                        return mac.verify(&signature_bytes).is_ok();
-                    }
-                    debug!("Invalid signature");
-                    return false;
-                }
-                DeliveryType::GitLab => {
-                    if signature == secret {
-                        return true;
-                    } else {
-                        debug!("Invalid token");
-                        return false;
-                    }
-                }
-            }
-        } else {
-            debug!("No secret given, passing...");
-            return false;
+    /// Authenticate the payload from GitHub using crates provided by RustCrypto team
+    pub fn auth_github(&self, delivery: &Delivery) -> bool {
+        let secret = unwrap_or_false!(&self.secret);
+        let signature = unwrap_or_false!(&delivery.signature);
+        debug!("Received signature: {}", &signature);
+        let request_body = unwrap_or_false!(&delivery.request_body);
+        debug!("Request body: {}", &request_body);
+        let signature_hex = signature[5..signature.len()].as_bytes();
+        if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
+            let secret_bytes = secret.as_bytes();
+            let request_body_bytes = request_body.as_bytes();
+            let mut mac = unwrap_or_false!(HmacSha1::new_varkey(secret_bytes).ok());
+            mac.input(request_body_bytes);
+            debug!("Validating payload with given secret");
+            return mac.verify(&signature_bytes).is_ok();
         }
+        debug!("Invalid signature");
+        return false;
     }
 
     #[cfg(all(
         not(feature = "crypto-use-rustcrypto"),
         not(feature = "crypto-use-ring")
     ))]
+    /// With no cryptography library enabled, we are unable to authenticate payload.
+    fn auth_github(&self, delivery: &Delivery) -> bool {
+        warn!("Unable to authenticate GitHub payload due to lack of cryptography support, passing...");
+        true
+    }
+
+    /// Authenticate payload from GitLab, it does not require any cryptography algorithm
+    fn auth_gitlab(&self, delivery: &Delivery) -> bool {
+        let secret = unwrap_or_false!(&self.secret);
+        let signature = unwrap_or_false!(&delivery.signature);
+        debug!("Received token: {}", &signature);
+        if signature == secret {
+            true
+        } else {
+            debug!("Invalid token");
+            false
+        }
+    }
+
+    /// Authenticate payload
     pub fn auth(&self, delivery: &Delivery) -> bool {
-        if let Some(secret) = &self.secret {
+        if self.secret.is_some() {
             match delivery.delivery_type {
-                DeliveryType::GitHub => {
-                    info!(
-                        "Payload authentication not enabled for requests from GitHub, passing..."
-                    );
-                    true
-                }
-                DeliveryType::GitLab => {
-                    let signature = unwrap_or_false!(&delivery.signature);
-                    debug!("Signature/token: {}", &signature);
-                    if signature == secret {
-                        true
-                    } else {
-                        debug!("Invalid token");
-                        false
-                    }
-                }
+                DeliveryType::GitHub => self.auth_github(delivery),
+                DeliveryType::GitLab => self.auth_gitlab(delivery),
             }
         } else {
             debug!("No secret given, passing...");
@@ -229,10 +203,10 @@ mod tests {
     #[cfg(feature = "crypto-use-ring")]
     use ring::hmac;
 
-    /// Test payload authentication with `ring`: Valid signature
+    /// Test GitHub payload authentication with `ring`: Valid signature
     #[cfg(feature = "crypto-use-ring")]
     #[test]
-    fn payload_authentication_ring() {
+    fn payload_authentication_github_ring() {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Bazinga!"}"#);
@@ -257,10 +231,10 @@ mod tests {
         assert!(hook.auth(&delivery));
     }
 
-    /// Test payload authentication with crates from RustCrypto team: Valid signature
+    /// Test GitHub payload authentication with crates from RustCrypto team: Valid signature
     #[cfg(feature = "crypto-use-rustcrypto")]
     #[test]
-    fn payload_authentication_rustcrypto() {
+    fn payload_authentication_github_rustcrypto() {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Bazinga!"}"#);
@@ -288,9 +262,9 @@ mod tests {
         //assert!(true);
     }
 
-    /// Test payload authentication: Invalid signature
+    /// Test GitHub payload authentication: Invalid signature
     #[test]
-    fn payload_authentication_fail() {
+    fn payload_authentication_github_fail() {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Another test!"}"#);
@@ -303,6 +277,38 @@ mod tests {
             Some(signature),
             ContentType::JSON,
             Some(request_body),
+        );
+        assert_eq!(hook.auth(&delivery), false);
+    }
+
+    /// Test GitLab payload authentication: Valid token
+    #[test]
+    fn payload_authentication_gitlab() {
+        let secret = String::from("secret");
+        let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
+        let delivery = Delivery::new(
+            DeliveryType::GitLab,
+            None,
+            None,
+            Some(secret),
+            ContentType::JSON,
+            None,
+        );
+        assert!(hook.auth(&delivery));
+    }
+
+    /// Test GitLab payload authentication: Invalid token
+    #[test]
+    fn payload_authentication_gitlab_fail() {
+        let secret = String::from("secret");
+        let hook = Hook::new("*", Some(String::from("AnotherSecret")), |_: &Delivery| {});
+        let delivery = Delivery::new(
+            DeliveryType::GitLab,
+            None,
+            None,
+            Some(secret),
+            ContentType::JSON,
+            None,
         );
         assert_eq!(hook.auth(&delivery), false);
     }
