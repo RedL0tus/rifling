@@ -63,7 +63,7 @@ pub struct Constructor {
 pub struct Delivery {
     pub delivery_type: DeliveryType,
     pub id: Option<String>,
-    pub event: Option<String>,
+    pub event: String,
     pub payload: Option<Value>,
     pub unparsed_payload: Option<String>,
     pub request_body: Option<String>, // for x-www-form-urlencoded authentication support
@@ -102,7 +102,7 @@ impl Delivery {
     pub fn new(
         delivery_type: DeliveryType,
         id: Option<String>,
-        event: Option<String>,
+        event: String,
         signature: Option<String>,
         content_type: ContentType,
         request_body: Option<String>,

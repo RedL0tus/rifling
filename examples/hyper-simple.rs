@@ -36,11 +36,7 @@ fn main() {
             }
         }
         #[cfg(not(feature = "parse"))]
-        {
-            if let Some(event) = &delivery.event {
-                info!("Received \"{}\" action!", event);
-            }
-        }
+        info!("Received \"{}\" action!", &delivery.event);
     });
     let another_hook = Hook::new("push", Some(String::from("secret")), |_: &Delivery| {
         info!("Pushed!");

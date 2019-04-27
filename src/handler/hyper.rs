@@ -119,7 +119,7 @@ impl Service for Handler {
                         let delivery = Delivery::new(
                             delivery_type,
                             id,
-                            Some(event),
+                            event,
                             signature,
                             content_type,
                             request_body,

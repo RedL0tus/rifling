@@ -223,7 +223,7 @@ mod tests {
         let delivery = Delivery::new(
             DeliveryType::GitHub,
             None,
-            Some(String::from("push")),
+            String::from("push"),
             Some(signature_field),
             ContentType::JSON,
             Some(request_body),
@@ -253,7 +253,7 @@ mod tests {
         let delivery = Delivery::new(
             DeliveryType::GitHub,
             None,
-            Some(String::from("push")),
+            String::from("push"),
             Some(signature_field),
             ContentType::JSON,
             Some(request_body),
@@ -273,7 +273,7 @@ mod tests {
         let delivery = Delivery::new(
             DeliveryType::GitHub,
             None,
-            Some(String::from("push")),
+            String::from("push"),
             Some(signature),
             ContentType::JSON,
             Some(request_body),
@@ -289,7 +289,7 @@ mod tests {
         let delivery = Delivery::new(
             DeliveryType::GitLab,
             None,
-            None,
+            String::from("push"),
             Some(secret),
             ContentType::JSON,
             None,
@@ -305,7 +305,7 @@ mod tests {
         let delivery = Delivery::new(
             DeliveryType::GitLab,
             None,
-            None,
+            String::from("push"),
             Some(secret),
             ContentType::JSON,
             None,
