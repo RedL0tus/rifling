@@ -217,8 +217,8 @@ mod tests {
             .unwrap();
         let signature_field = String::from(format!("sha1={}", signature));
         let mut headers: HashMap<String, String> = HashMap::new();
-        headers.insert("X-Github-Event".to_string(), "push".to_string());
-        headers.insert("X-Hub-Signature".to_string(), signature_field);
+        headers.insert("x-github-event".to_string(), "push".to_string());
+        headers.insert("x-hub-signature".to_string(), signature_field);
         let delivery = Delivery::new(headers, Some(request_body));
         assert!(hook.auth(&delivery.unwrap()));
     }
@@ -243,8 +243,8 @@ mod tests {
             .expect("Invalid signature");
         let signature_field = String::from(format!("sha1={}", signature));
         let mut headers: HashMap<String, String> = HashMap::new();
-        headers.insert("X-Github-Event".to_string(), "push".to_string());
-        headers.insert("X-Hub-Signature".to_string(), signature_filed);
+        headers.insert("x-github-event".to_string(), "push".to_string());
+        headers.insert("x-hub-signature".to_string(), signature_filed);
         let delivery = Delivery::new(headers, Some(request_body));
         assert!(hook.auth(&delivery.unwrap()));
         //assert!(true);
@@ -259,8 +259,8 @@ mod tests {
         let request_body = payload.clone();
         let signature_field = String::from("sha1=ec760ee6d10bf638089f078b5a0c23f6575821e7");
         let mut headers: HashMap<String, String> = HashMap::new();
-        headers.insert("X-Github-Event".to_string(), "push".to_string());
-        headers.insert("X-Hub-Signature".to_string(), signature_field);
+        headers.insert("x-github-event".to_string(), "push".to_string());
+        headers.insert("x-hub-signature".to_string(), signature_field);
         let delivery = Delivery::new(headers, Some(request_body));
         assert_eq!(hook.auth(&delivery.unwrap()), false);
     }
@@ -277,8 +277,8 @@ mod tests_gitlab {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(secret), |_: &Delivery| {});
         let mut headers: HashMap<String, String> = HashMap::new();
-        headers.insert("X-Gitlab-Event".to_string(), "push".to_string());
-        headers.insert("X-Gitlab-Token".to_string(), "secret".to_string());
+        headers.insert("x-gitlab-event".to_string(), "push".to_string());
+        headers.insert("x-gitlab-token".to_string(), "secret".to_string());
         let delivery = Delivery::new(headers, None);
         assert!(hook.auth(&delivery.unwrap()));
     }
@@ -289,8 +289,8 @@ mod tests_gitlab {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(String::from("AnotherSecret")), |_: &Delivery| {});
         let mut headers: HashMap<String, String> = HashMap::new();
-        headers.insert("X-Gitlab-Event".to_string(), "push".to_string());
-        headers.insert("X-Gitlab-Token".to_string(), secret);
+        headers.insert("x-gitlab-event".to_string(), "push".to_string());
+        headers.insert("x-gitlab-token".to_string(), secret);
         let delivery = Delivery::new(headers, None);
         assert_eq!(hook.auth(&delivery.unwrap()), false);
     }

@@ -68,7 +68,7 @@ impl Service for Handler {
                 let value = if let Ok(header_value) = content.to_str() {
                     header_value.to_string()
                 } else {
-                    "unknown".to_string().to_lowercase()
+                    "unknown".to_string()
                 };
                 (key, value)
             })
