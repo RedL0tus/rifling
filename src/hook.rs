@@ -110,12 +110,7 @@ impl Hook {
             let request_body_bytes = request_body.as_bytes();
             let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
             debug!("Validating payload with given secret");
-            return hmac::verify_with_own_key(
-                &key,
-                &request_body_bytes,
-                &signature_bytes,
-            )
-            .is_ok();
+            return hmac::verify_with_own_key(&key, &request_body_bytes, &signature_bytes).is_ok();
         }
         debug!("Invalid signature");
         return false;
@@ -147,8 +142,10 @@ impl Hook {
         not(feature = "crypto-use-ring")
     ))]
     /// With no cryptography library enabled, we are unable to authenticate payload.
-    fn auth_github(&self, delivery: &Delivery) -> bool {
-        warn!("Unable to authenticate GitHub payload due to lack of cryptography support, passing...");
+    fn auth_github(&self, _delivery: &Delivery) -> bool {
+        warn!(
+            "Unable to authenticate GitHub payload due to lack of cryptography support, passing..."
+        );
         true
     }
 
@@ -192,8 +189,6 @@ impl Hook {
 #[cfg(any(feature = "crypto-use-rustcrypto", feature = "crypto-use-ring"))]
 #[cfg(test)]
 mod tests {
-    use super::super::handler::ContentType;
-    use super::super::handler::DeliveryType;
     #[cfg(feature = "crypto-use-rustcrypto")]
     use super::HmacSha1;
     use super::*;
@@ -202,6 +197,7 @@ mod tests {
     use ring::digest;
     #[cfg(feature = "crypto-use-ring")]
     use ring::hmac;
+    use std::collections::HashMap;
 
     /// Test GitHub payload authentication with `ring`: Valid signature
     #[cfg(feature = "crypto-use-ring")]
@@ -220,15 +216,11 @@ mod tests {
             .write_hex(&mut signature)
             .unwrap();
         let signature_field = String::from(format!("sha1={}", signature));
-        let delivery = Delivery::new(
-            DeliveryType::GitHub,
-            None,
-            String::from("push"),
-            Some(signature_field),
-            ContentType::JSON,
-            Some(request_body),
-        );
-        assert!(hook.auth(&delivery));
+        let mut headers: HashMap<String, String> = HashMap::new();
+        headers.insert("X-Github-Event".to_string(), "push".to_string());
+        headers.insert("X-Hub-Signature".to_string(), signature_field);
+        let delivery = Delivery::new(headers, Some(request_body));
+        assert!(hook.auth(&delivery.unwrap()));
     }
 
     /// Test GitHub payload authentication with crates from RustCrypto team: Valid signature
@@ -250,15 +242,11 @@ mod tests {
             .write_hex(&mut signature)
             .expect("Invalid signature");
         let signature_field = String::from(format!("sha1={}", signature));
-        let delivery = Delivery::new(
-            DeliveryType::GitHub,
-            None,
-            String::from("push"),
-            Some(signature_field),
-            ContentType::JSON,
-            Some(request_body),
-        );
-        assert!(hook.auth(&delivery));
+        let mut headers: HashMap<String, String> = HashMap::new();
+        headers.insert("X-Github-Event".to_string(), "push".to_string());
+        headers.insert("X-Hub-Signature".to_string(), signature_filed);
+        let delivery = Delivery::new(headers, Some(request_body));
+        assert!(hook.auth(&delivery.unwrap()));
         //assert!(true);
     }
 
@@ -269,32 +257,30 @@ mod tests {
         let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
         let payload = String::from(r#"{"zen": "Another test!"}"#);
         let request_body = payload.clone();
-        let signature = String::from("sha1=ec760ee6d10bf638089f078b5a0c23f6575821e7");
-        let delivery = Delivery::new(
-            DeliveryType::GitHub,
-            None,
-            String::from("push"),
-            Some(signature),
-            ContentType::JSON,
-            Some(request_body),
-        );
-        assert_eq!(hook.auth(&delivery), false);
+        let signature_field = String::from("sha1=ec760ee6d10bf638089f078b5a0c23f6575821e7");
+        let mut headers: HashMap<String, String> = HashMap::new();
+        headers.insert("X-Github-Event".to_string(), "push".to_string());
+        headers.insert("X-Hub-Signature".to_string(), signature_field);
+        let delivery = Delivery::new(headers, Some(request_body));
+        assert_eq!(hook.auth(&delivery.unwrap()), false);
     }
+}
+
+#[cfg(test)]
+mod tests_gitlab {
+    use super::*;
+    use std::collections::HashMap;
 
     /// Test GitLab payload authentication: Valid token
     #[test]
     fn payload_authentication_gitlab() {
         let secret = String::from("secret");
-        let hook = Hook::new("*", Some(secret.clone()), |_: &Delivery| {});
-        let delivery = Delivery::new(
-            DeliveryType::GitLab,
-            None,
-            String::from("push"),
-            Some(secret),
-            ContentType::JSON,
-            None,
-        );
-        assert!(hook.auth(&delivery));
+        let hook = Hook::new("*", Some(secret), |_: &Delivery| {});
+        let mut headers: HashMap<String, String> = HashMap::new();
+        headers.insert("X-Gitlab-Event".to_string(), "push".to_string());
+        headers.insert("X-Gitlab-Token".to_string(), "secret".to_string());
+        let delivery = Delivery::new(headers, None);
+        assert!(hook.auth(&delivery.unwrap()));
     }
 
     /// Test GitLab payload authentication: Invalid token
@@ -302,14 +288,10 @@ mod tests {
     fn payload_authentication_gitlab_fail() {
         let secret = String::from("secret");
         let hook = Hook::new("*", Some(String::from("AnotherSecret")), |_: &Delivery| {});
-        let delivery = Delivery::new(
-            DeliveryType::GitLab,
-            None,
-            String::from("push"),
-            Some(secret),
-            ContentType::JSON,
-            None,
-        );
-        assert_eq!(hook.auth(&delivery), false);
+        let mut headers: HashMap<String, String> = HashMap::new();
+        headers.insert("X-Gitlab-Event".to_string(), "push".to_string());
+        headers.insert("X-Gitlab-Token".to_string(), secret);
+        let delivery = Delivery::new(headers, None);
+        assert_eq!(hook.auth(&delivery.unwrap()), false);
     }
 }

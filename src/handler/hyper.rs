@@ -18,26 +18,11 @@ use futures::{future, Future};
 use hyper::service::{NewService, Service};
 use hyper::{Body, Error, Request, Response, StatusCode};
 
-use super::Constructor;
-use super::ContentType;
-use super::Delivery;
-use super::DeliveryType;
-use super::Handler;
+use std::collections::HashMap;
 
-/// Get Option<String> typed header value from HeaderMap<HeaderValue> of hyper.
-macro_rules! hyper_get_header_value {
-    ($headers:expr, $key:expr) => {
-        if let Some(value) = $headers.get($key) {
-            if let Ok(inner) = value.to_str() {
-                Some(String::from(inner.clone()))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
-}
+use super::Constructor;
+use super::Delivery;
+use super::Handler;
 
 /// Implement `NewService` trait to `Constructor`
 impl NewService for Constructor {
@@ -70,22 +55,29 @@ impl Service for Handler {
                 .body(body.into())
                 .unwrap()
         }
-        let headers = req.headers();
-        let (mut event, delivery_type) =
-            if let Some(event_string) = hyper_get_header_value!(&headers, "X-Github-Event") {
-                (event_string.clone(), DeliveryType::GitHub)
-            } else if let Some(event_string) = hyper_get_header_value!(&headers, "X-Gitlab-Event") {
-                (event_string.clone(), DeliveryType::GitLab)
-            } else {
-                // Invalid payload without a event header
-                return Box::new(future::ok(response(
-                    StatusCode::ACCEPTED,
-                    "Invalid payload",
-                )));
-            };
-        event.make_ascii_lowercase();
-        event = event.replace(" ", "_");
-        let executor = self.get_hooks(event.as_str());
+        let headers = req
+            .headers()
+            .clone()
+            .into_iter()
+            .map(|(name, content)| {
+                let key = if let Some(header_name) = name {
+                    header_name.as_str().to_string()
+                } else {
+                    "unknown".to_string().to_lowercase()
+                };
+                let value = if let Ok(header_value) = content.to_str() {
+                    header_value.to_string()
+                } else {
+                    "unknown".to_string().to_lowercase()
+                };
+                (key, value)
+            })
+            .collect::<HashMap<String, String>>();
+        let mut delivery = match Delivery::new(headers, None) {
+            Ok(delivery_inner) => delivery_inner,
+            Err(err_msg) => return Box::new(future::ok(response(StatusCode::ACCEPTED, err_msg))),
+        };
+        let executor = self.get_hooks(delivery.event.as_str());
         if executor.is_empty() {
             // No matched hook found
             return Box::new(future::ok(response(
@@ -93,37 +85,13 @@ impl Service for Handler {
                 "No matched hook configured",
             )));
         }
-        let id = hyper_get_header_value!(&headers, "X-Github-Delivery");
-        let signature = match delivery_type {
-            DeliveryType::GitHub => hyper_get_header_value!(&headers, "X-Hub-Signature"),
-            DeliveryType::GitLab => hyper_get_header_value!(&headers, "X-Gitlab-Token"),
-        };
-        let content_type = hyper_get_header_value!(&headers, "content-type");
-        if content_type.is_none() {
-            // No valid content-type header found
-            return Box::new(future::ok(response(
-                StatusCode::ACCEPTED,
-                "Invalid payload",
-            )));
-        }
         Box::new(
             req.into_body()
                 .concat2()
                 .map(move |chunk| String::from_utf8(chunk.to_vec()).ok())
                 .and_then(move |request_body| {
-                    let content_type: ContentType = match content_type.unwrap().as_str() {
-                        "application/x-www-form-urlencoded" => ContentType::URLENCODED,
-                        _ => ContentType::JSON, // Default
-                    };
                     if request_body.is_some() {
-                        let delivery = Delivery::new(
-                            delivery_type,
-                            id,
-                            event,
-                            signature,
-                            content_type,
-                            request_body,
-                        );
+                        delivery.update_request_body(request_body);
                         debug!("Received delivery: {:#?}", &delivery);
                         executor.run(delivery);
                         future::ok(response(StatusCode::OK, "OK"))

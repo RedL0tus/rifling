@@ -33,7 +33,18 @@ macro_rules! hooks_find_match {
     }};
 }
 
+macro_rules! header_get_owned {
+    ($headers:expr, $key:expr) => {
+        if let Some(header_value) = $headers.get($key) {
+            Some(header_value.to_owned())
+        } else {
+            None
+        }
+    };
+}
+
 /// Type of content
+#[derive(Clone, Debug)]
 pub enum ContentType {
     JSON,
     URLENCODED,
@@ -62,6 +73,7 @@ pub struct Constructor {
 #[derive(Debug, Clone)]
 pub struct Delivery {
     pub delivery_type: DeliveryType,
+    pub content_type: ContentType,
     pub id: Option<String>,
     pub event: String,
     pub payload: Option<Value>,
@@ -70,9 +82,8 @@ pub struct Delivery {
     pub signature: Option<String>,
 }
 
-/// (Private) Executor of the hooks, passed into futures.
-/// It should not be used outside of the crate.
-struct Executor {
+/// Executor of the hooks, passed into futures.
+pub struct Executor {
     matched_hooks: Vec<Hook>,
 }
 
@@ -100,18 +111,61 @@ impl Constructor {
 impl Delivery {
     /// Create a new Delivery
     pub fn new(
-        delivery_type: DeliveryType,
-        id: Option<String>,
-        event: String,
-        signature: Option<String>,
-        content_type: ContentType,
+        headers: HashMap<String, String>,
         request_body: Option<String>,
-    ) -> Delivery {
-        let payload: Option<String> = match content_type {
+    ) -> Result<Delivery, &'static str> {
+        // Identify delivery type
+        let (mut event, delivery_type) = if let Some(event_string) = headers.get("x-github-event") {
+            (event_string.to_owned(), DeliveryType::GitHub)
+        } else if let Some(event_string) = headers.get("x-gitlab-event") {
+            (event_string.to_owned(), DeliveryType::GitLab)
+        } else {
+            return Err("Could not determine delivery type");
+        };
+        event.make_ascii_lowercase();
+        event = event.replace(" ", "_");
+        // Get content type
+        let content_type = if let Some(header_value) = headers.get("content-type") {
+            match header_value.as_str() {
+                "application/json" => ContentType::JSON,
+                "application/x-www-form-urlencoded" => ContentType::URLENCODED,
+                _ => ContentType::JSON,
+            }
+        } else {
+            ContentType::JSON
+        };
+        // Get delivery ID: only available in requests from GitHub
+        let id = match delivery_type {
+            DeliveryType::GitHub => header_get_owned!(&headers, "x-github-delivery"),
+            _ => None,
+        };
+        let signature = match delivery_type {
+            DeliveryType::GitHub => header_get_owned!(&headers, "x-hub-signature"),
+            DeliveryType::GitLab => header_get_owned!(&headers, "x-gitlab-token"),
+        };
+        let mut delivery = Self {
+            delivery_type,
+            content_type,
+            id,
+            event,
+            payload: None,
+            unparsed_payload: None,
+            request_body: None,
+            signature,
+        };
+        if request_body.is_some() {
+            delivery.update_request_body(request_body);
+        }
+        Ok(delivery)
+    }
+
+    /// Update request body of the delivery
+    pub fn update_request_body(&mut self, request_body: Option<String>) {
+        let payload: Option<String> = match self.content_type {
             ContentType::JSON => request_body.clone(),
             #[cfg(feature = "content-type-urlencoded")]
             ContentType::URLENCODED => {
-                if let Some(request_body_string) = &request_body {
+                if let Some(request_body_string) = request_body.clone() {
                     if let Some(payload_string) =
                         form_urlencoded::parse(request_body_string.as_bytes())
                             .into_owned()
@@ -129,7 +183,7 @@ impl Delivery {
             #[cfg(not(feature = "content-type-urlencoded"))]
             _ => None,
         };
-        debug!("Payload body: {:?}", &payload);
+        debug!("Payload body set to: {:?}", &payload);
         #[cfg(feature = "parse")]
         let parsed_payload = if let Some(payload_string) = &payload {
             serde_json::from_str(payload_string.as_str()).ok()
@@ -139,22 +193,17 @@ impl Delivery {
         #[cfg(not(feature = "parse"))]
         let parsed_payload = None;
         debug!("Parsed payload: {:#?}", &parsed_payload);
-        Self {
-            delivery_type,
-            id,
-            event,
-            payload: parsed_payload,
-            unparsed_payload: payload,
-            request_body,
-            signature,
-        }
+        // Update delivery
+        self.request_body = request_body;
+        self.unparsed_payload = payload;
+        self.payload = parsed_payload;
     }
 }
 
 /// The main impl clause of `Executor`
 impl Executor {
     /// Run the hooks
-    fn run(self, delivery: Delivery) {
+    pub fn run(self, delivery: Delivery) {
         for hook in self.matched_hooks {
             debug!("Running hook for '{}' event", &hook.event);
             hook.handle_delivery(&delivery);
@@ -162,7 +211,7 @@ impl Executor {
     }
 
     /// Test if there are no matched hook found
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.matched_hooks.len() == 0
     }
 }
