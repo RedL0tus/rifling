@@ -244,7 +244,7 @@ mod tests {
         let signature_field = String::from(format!("sha1={}", signature));
         let mut headers: HashMap<String, String> = HashMap::new();
         headers.insert("x-github-event".to_string(), "push".to_string());
-        headers.insert("x-hub-signature".to_string(), signature_filed);
+        headers.insert("x-hub-signature".to_string(), signature_field);
         let delivery = Delivery::new(headers, Some(request_body));
         assert!(hook.auth(&delivery.unwrap()));
         //assert!(true);
