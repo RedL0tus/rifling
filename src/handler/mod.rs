@@ -55,6 +55,7 @@ pub enum ContentType {
 pub enum DeliveryType {
     GitHub,
     GitLab,
+    DockerHub,
 }
 
 #[cfg(not(feature = "parse"))]
@@ -114,11 +115,19 @@ impl Delivery {
         headers: HashMap<String, String>,
         request_body: Option<String>,
     ) -> Result<Delivery, &'static str> {
+        debug!("Received headers: {:#?}", &headers);
         // Identify delivery type
         let (mut event, delivery_type) = if let Some(event_string) = headers.get("x-github-event") {
             (event_string.to_owned(), DeliveryType::GitHub)
         } else if let Some(event_string) = headers.get("x-gitlab-event") {
             (event_string.to_owned(), DeliveryType::GitLab)
+        } else if let Some(newrelic_id) = headers.get("x-newrelic-id") {
+            // Determine source of delivery by NewRelic ID
+            if newrelic_id == &"UQUFVFJUGwUJVlhaBgY=".to_string() {
+                ("docker_push".to_string(), DeliveryType::DockerHub)
+            } else {
+                return Err("Could not determine delivery type");
+            }
         } else {
             return Err("Could not determine delivery type");
         };
@@ -126,7 +135,7 @@ impl Delivery {
         event = event.replace(" ", "_");
         // Get content type
         let content_type = if let Some(header_value) = headers.get("content-type") {
-            match header_value.as_str() {
+            match header_value.to_lowercase().as_str() {
                 "application/json" => ContentType::JSON,
                 "application/x-www-form-urlencoded" => ContentType::URLENCODED,
                 _ => ContentType::JSON,
@@ -142,6 +151,7 @@ impl Delivery {
         let signature = match delivery_type {
             DeliveryType::GitHub => header_get_owned!(&headers, "x-hub-signature"),
             DeliveryType::GitLab => header_get_owned!(&headers, "x-gitlab-token"),
+            _ => None,
         };
         let mut delivery = Self {
             delivery_type,

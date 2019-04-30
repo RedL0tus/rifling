@@ -31,6 +31,7 @@ fn main() {
                     match delivery.delivery_type {
                         DeliveryType::GitHub => payload["action"].as_str().unwrap(),
                         DeliveryType::GitLab => payload["event_name"].as_str().unwrap(),
+                        _ => &delivery.event.as_str(),
                     }
                 );
             }

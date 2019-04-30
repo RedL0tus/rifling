@@ -168,6 +168,7 @@ impl Hook {
             match delivery.delivery_type {
                 DeliveryType::GitHub => self.auth_github(delivery),
                 DeliveryType::GitLab => self.auth_gitlab(delivery),
+                _ => true, // Not supported (e.g. Docker Hub, it sucks)
             }
         } else {
             debug!("No secret given, passing...");
