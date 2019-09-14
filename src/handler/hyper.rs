@@ -30,7 +30,7 @@ impl NewService for Constructor {
     type ResBody = Body;
     type Error = Error;
     type Service = Handler;
-    type Future = Box<Future<Item = Self::Service, Error = Self::InitError> + Send>;
+    type Future = Box<dyn Future<Item = Self::Service, Error = Self::InitError> + Send>;
     type InitError = Error;
 
     /// Create a new handler to handle the service
@@ -45,7 +45,7 @@ impl Service for Handler {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = Error;
-    type Future = Box<Future<Item = Response<Body>, Error = Error> + Send + 'static>;
+    type Future = Box<dyn Future<Item = Response<Body>, Error = Error> + Send + 'static>;
 
     /// Handle the request
     fn call(&mut self, req: Request<Self::ReqBody>) -> Self::Future {

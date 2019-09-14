@@ -25,8 +25,6 @@ use hex::FromHex;
 #[cfg(feature = "crypto-use-rustcrypto")]
 use hmac::{Hmac, Mac};
 #[cfg(feature = "crypto-use-ring")]
-use ring::digest;
-#[cfg(feature = "crypto-use-ring")]
 use ring::hmac;
 #[cfg(feature = "crypto-use-rustcrypto")]
 use sha1::Sha1;
@@ -61,7 +59,7 @@ pub trait HookFunc: Sync + Send {
 pub struct Hook {
     pub event: &'static str,
     pub secret: Option<String>,
-    pub func: Arc<HookFunc>, // To allow the registration of multiple hooks, it has to be a trait object.
+    pub func: Arc<dyn HookFunc>, // To allow the registration of multiple hooks, it has to be a trait object.
 }
 
 /// Implement `HookFunc` to `Fn(&Delivery)`.
@@ -108,9 +106,9 @@ impl Hook {
         if let Ok(signature_bytes) = Vec::from_hex(signature_hex) {
             let secret_bytes = secret.as_bytes();
             let request_body_bytes = request_body.as_bytes();
-            let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
+            let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, &secret_bytes);
             debug!("Validating payload with given secret");
-            return hmac::verify_with_own_key(&key, &request_body_bytes, &signature_bytes).is_ok();
+            return hmac::verify(&key, &request_body_bytes, &signature_bytes).is_ok();
         }
         debug!("Invalid signature");
         return false;
@@ -195,8 +193,6 @@ mod tests {
     use super::*;
     use hex::ToHex;
     #[cfg(feature = "crypto-use-ring")]
-    use ring::digest;
-    #[cfg(feature = "crypto-use-ring")]
     use ring::hmac;
     use std::collections::HashMap;
 
@@ -210,7 +206,7 @@ mod tests {
         let request_body = payload.clone();
         let secret_bytes = secret.as_bytes();
         let request_bytes = request_body.as_bytes();
-        let key = hmac::SigningKey::new(&digest::SHA1, &secret_bytes);
+        let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, &secret_bytes);
         let mut signature = String::new();
         hmac::sign(&key, &request_bytes)
             .as_ref()
